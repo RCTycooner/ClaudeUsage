@@ -2,6 +2,7 @@ using System.Windows;
 using ClaudeUsage.Storage;
 using ClaudeUsage.Tray;
 using ClaudeUsage.UI;
+using ClaudeUsage.Usage;
 
 namespace ClaudeUsage;
 
@@ -16,9 +17,15 @@ public partial class App : Application, IDisposable
     private SettingsStore? _settingsStore;
     private TrayIcon? _tray;
     private MainWindow? _window;
+    private FileLogger? _logger;
+    private UsageHistoryStore? _history;
+    private UsagePoller? _poller;
 
     /// <summary>True once the app is really exiting, so the window's Closing handler lets it close.</summary>
     public bool IsQuitting { get; private set; }
+
+    /// <summary>Latest snapshot, last error and history; the window binds to this.</summary>
+    public UsageState UsageState { get; } = new();
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -36,11 +43,28 @@ public partial class App : Application, IDisposable
             return;
         }
 
-        _settingsStore = new SettingsStore(SettingsStore.DefaultFolder);
+        var folder = SettingsStore.DefaultFolder;
+        _settingsStore = new SettingsStore(folder);
+        _logger = new FileLogger(folder);
         _window = new MainWindow(_settingsStore);
         _tray = new TrayIcon();
         _tray.ShowUiRequested += (_, _) => ShowWindow();
         _tray.QuitRequested += (_, _) => Quit();
+
+        // Show the last known values straight away, then start polling (first poll runs immediately).
+        _history = new UsageHistoryStore(folder);
+        var history = _history.Load();
+        if (history.Count > 0)
+        {
+            var last = history[^1].ToSnapshot();
+            UsageState.SetSnapshot(last, history);
+            _tray.Update(last);
+        }
+
+        _poller = new UsagePoller(new ClaudeCliUsageSource(folder, _settingsStore.Load().ClaudePath), Dispatcher);
+        _poller.Updated += OnUsageUpdated;
+        _poller.Failed += OnUsageFailed;
+        _poller.Start();
 
         StartListeningForSecondInstance();
         _window.Show();
@@ -56,6 +80,7 @@ public partial class App : Application, IDisposable
     {
         GC.SuppressFinalize(this);
         _listenerCts?.Cancel();
+        _poller?.Dispose();
         _tray?.Dispose();
         _settingsStore?.Dispose();
         _showEvent?.Dispose();
@@ -66,6 +91,20 @@ public partial class App : Application, IDisposable
             _instanceMutex.Dispose();
             _instanceMutex = null;
         }
+    }
+
+    private void OnUsageUpdated(object? sender, UsageSnapshot snapshot)
+    {
+        _history?.Append(snapshot);
+        UsageState.SetSnapshot(snapshot, _history?.Samples ?? []);
+        _tray?.Update(snapshot);
+    }
+
+    private void OnUsageFailed(object? sender, UsagePollFailure failure)
+    {
+        _logger?.Log(failure.Message, failure.Error, failure.RawText);
+        UsageState.SetFailure(failure);
+        _tray?.Update(UsageState.Latest, hasError: true);
     }
 
     private void ShowWindow() => _window?.ShowAndActivate();

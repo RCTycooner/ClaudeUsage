@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
+using ClaudeUsage.Usage;
 using Drawing = System.Drawing;
 using WinForms = System.Windows.Forms;
 
@@ -14,41 +15,55 @@ public sealed partial class TrayIcon : IDisposable
     private readonly WinForms.NotifyIcon _notifyIcon;
     private readonly WinForms.ContextMenuStrip _menu;
     private readonly Drawing.Icon _icon;
+    private readonly WinForms.ToolStripMenuItem _sessionItem;
+    private readonly WinForms.ToolStripMenuItem _weekItem;
+    private readonly WinForms.ToolStripMenuItem _fableItem;
+    private UsageSnapshot? _snapshot;
 
     public TrayIcon()
     {
         _icon = CreatePlaceholderIcon();
         _menu = new WinForms.ContextMenuStrip();
 
-        // Phase 2: insert three disabled stat items at index 0..2 followed by a ToolStripSeparator
-        // (see Update); they sit above "Show UI" / "Quit".
+        _sessionItem = AddStatItem();
+        _weekItem = AddStatItem();
+        _fableItem = AddStatItem();
+        _menu.Items.Add(new WinForms.ToolStripSeparator());
         _menu.Items.Add("Show UI", null, (_, _) => ShowUiRequested?.Invoke(this, EventArgs.Empty));
         _menu.Items.Add("Quit", null, (_, _) => QuitRequested?.Invoke(this, EventArgs.Empty));
 
         _notifyIcon = new WinForms.NotifyIcon
         {
             Icon = _icon,
-            Text = "Claude usage",
+            Text = UsageText.WaitingTooltip,
             ContextMenuStrip = _menu,
             Visible = true,
         };
         _notifyIcon.MouseUp += OnMouseUp;
+        _menu.Opening += OnMenuOpening;
+        RefreshStatItems();
     }
 
     public event EventHandler? ShowUiRequested;
 
     public event EventHandler? QuitRequested;
 
-    /// <summary>Phase 2 hook: update the tooltip (max 127 chars) and the stat menu items.</summary>
-    public void Update(string tooltip)
+    /// <summary>
+    /// Shows the last known snapshot in the stat items. With <paramref name="hasError"/> the tooltip switches to
+    /// the error text, while the menu keeps showing the last known values.
+    /// </summary>
+    public void Update(UsageSnapshot? snapshot, bool hasError = false)
     {
-        _notifyIcon.Text = tooltip.Length > 127 ? tooltip[..127] : tooltip;
+        _snapshot = snapshot;
+        _notifyIcon.Text = UsageText.Truncate(hasError ? UsageText.ErrorTooltip : UsageText.Tooltip(snapshot));
+        RefreshStatItems();
     }
 
     public void Dispose()
     {
         _notifyIcon.Visible = false;
         _notifyIcon.MouseUp -= OnMouseUp;
+        _menu.Opening -= OnMenuOpening;
         _notifyIcon.Dispose();
         _menu.Dispose();
         _icon.Dispose();
@@ -80,6 +95,24 @@ public sealed partial class TrayIcon : IDisposable
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool DestroyIcon(nint handle);
+
+    private WinForms.ToolStripMenuItem AddStatItem()
+    {
+        var item = new WinForms.ToolStripMenuItem { Enabled = false };
+        _menu.Items.Add(item);
+        return item;
+    }
+
+    private void OnMenuOpening(object? sender, System.ComponentModel.CancelEventArgs e) => RefreshStatItems();
+
+    /// <summary>Recomputes the countdowns, so they are current whenever the menu opens.</summary>
+    private void RefreshStatItems()
+    {
+        var now = DateTimeOffset.Now;
+        _sessionItem.Text = UsageText.MenuLine("Session", _snapshot?.Session, now);
+        _weekItem.Text = UsageText.MenuLine("Week", _snapshot?.Week, now);
+        _fableItem.Text = UsageText.MenuLine("Fable week", _snapshot?.FableWeek, now);
+    }
 
     private void OnMouseUp(object? sender, WinForms.MouseEventArgs e)
     {
