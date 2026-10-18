@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/format-cs.sh\" 2>/dev/null || true",
+            "timeout": 60,
+            "statusMessage": "Formatting C#..."
+          }
+        ]
+      }
+    ]
+  }
+}
