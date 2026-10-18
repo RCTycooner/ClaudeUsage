@@ -11,12 +11,15 @@ public partial class MainWindow : Window
     private const double MinVisiblePixels = 40;
 
     private readonly SettingsStore _store;
+    private readonly MainViewModel _viewModel;
     private readonly bool _loaded;
 
-    public MainWindow(SettingsStore store)
+    public MainWindow(SettingsStore store, MainViewModel viewModel)
     {
         _store = store;
+        _viewModel = viewModel;
         InitializeComponent();
+        DataContext = viewModel;
 
         var settings = store.Load();
         Topmost = settings.Topmost;
@@ -89,6 +92,8 @@ public partial class MainWindow : Window
         e.Cancel = true;
         Hide();
     }
+
+    private void OnFooterClick(object sender, RoutedEventArgs e) => _viewModel.CopyRawText();
 
     private void OnCloseClick(object sender, RoutedEventArgs e) => Hide();
 

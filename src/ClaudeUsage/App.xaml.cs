@@ -31,6 +31,14 @@ public partial class App : Application, IDisposable
     {
         base.OnStartup(e);
 
+        // Debug aid: --snapshot <path.png> renders the window with synthetic data and exits (see SnapshotRenderer).
+        if (e.Args is ["--snapshot", var snapshotPath])
+        {
+            SnapshotRenderer.Render(snapshotPath);
+            Shutdown();
+            return;
+        }
+
         _instanceMutex = new Mutex(initiallyOwned: true, MutexName, out bool isFirst);
         _showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
 
@@ -46,7 +54,9 @@ public partial class App : Application, IDisposable
         var folder = SettingsStore.DefaultFolder;
         _settingsStore = new SettingsStore(folder);
         _logger = new FileLogger(folder);
-        _window = new MainWindow(_settingsStore);
+        var viewModel = new MainViewModel(UsageState);
+        viewModel.Start();
+        _window = new MainWindow(_settingsStore, viewModel);
         _tray = new TrayIcon();
         _tray.ShowUiRequested += (_, _) => ShowWindow();
         _tray.QuitRequested += (_, _) => Quit();
