@@ -38,7 +38,7 @@ public sealed class UsageChart : FrameworkElement
     [
         (s => s.Session, Palette.FrozenPen(Palette.SessionSeriesLine, 1.1), Palette.SessionSeries),
         (s => s.Week, Palette.FrozenPen(Palette.WeekSeries, 1.6), Palette.WeekSeries),
-        (s => s.FableWeek, Palette.FrozenPen(Palette.FableSeries, 1.6), Palette.FableSeries),
+        (s => s.ModelWeek, Palette.FrozenPen(Palette.ModelSeries, 1.6), Palette.ModelSeries),
     ];
 
     public UsageChart()

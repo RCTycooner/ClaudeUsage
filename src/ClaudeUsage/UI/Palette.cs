@@ -25,7 +25,7 @@ public static class Palette
     public static readonly Brush SessionSeriesLine = Frozen(0x38, 0xBD, 0xF8, 0xB0);
 
     public static readonly Brush WeekSeries = Frozen(0xA7, 0x8B, 0xFA);
-    public static readonly Brush FableSeries = Frozen(0xF4, 0x72, 0xB6);
+    public static readonly Brush ModelSeries = Frozen(0xF4, 0x72, 0xB6);
 
     public static readonly Brush Ok = Frozen(0x4A, 0xDE, 0x80);
     public static readonly Brush Warning = Frozen(0xFB, 0xBF, 0x24);

@@ -11,7 +11,8 @@ public sealed class UsageTextTests
         new UsageBucket(s, s_now.AddMinutes(4 * 60 + 55)),
         new UsageBucket(w, s_now.AddHours(37)),
         f is { } fv ? new UsageBucket(fv, s_now.AddHours(37)) : null,
-        "");
+        "",
+        "Fable");
 
     [Fact]
     public void Tooltip_lists_all_buckets()
@@ -29,6 +30,27 @@ public sealed class UsageTextTests
     public void Tooltip_without_data()
     {
         Assert.Equal(UsageText.WaitingTooltip, UsageText.Tooltip(null));
+    }
+
+    [Fact]
+    public void Tooltip_uses_model_initial_or_M()
+    {
+        Assert.Equal("Claude: S 3% · W 17% · O 22%", UsageText.Tooltip(Snapshot(3, 17, 22) with { ModelName = "Opus" }));
+        Assert.Equal("Claude: S 3% · W 17% · M 22%", UsageText.Tooltip(Snapshot(3, 17, 22) with { ModelName = null }));
+    }
+
+    [Fact]
+    public void Failed_poll_keeps_last_values_behind_a_marker()
+    {
+        Assert.Equal(
+            UsageText.StalePrefix + "Claude: S 3% · W 17% · F 22%",
+            UsageText.Tooltip(Snapshot(3, 17, 22), hasError: true));
+    }
+
+    [Fact]
+    public void Failed_poll_without_any_data_shows_error()
+    {
+        Assert.Equal(UsageText.ErrorTooltip, UsageText.Tooltip(null, hasError: true));
     }
 
     [Fact]

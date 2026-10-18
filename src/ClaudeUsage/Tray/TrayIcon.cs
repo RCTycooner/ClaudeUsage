@@ -19,11 +19,13 @@ public sealed partial class TrayIcon : IDisposable
     private readonly IStartupRegistration _startup;
     private readonly WinForms.ToolStripMenuItem _refreshItem;
     private readonly WinForms.ToolStripMenuItem _startupItem;
-    private Drawing.Icon _icon;
     private readonly WinForms.ToolStripMenuItem _sessionItem;
     private readonly WinForms.ToolStripMenuItem _weekItem;
-    private readonly WinForms.ToolStripMenuItem _fableItem;
+    private readonly WinForms.ToolStripMenuItem _modelItem;
+    private Drawing.Icon _icon;
     private UsageSnapshot? _snapshot;
+    private bool _ignoreNextMouseUp;
+    private bool _disposed;
 
     public TrayIcon(IStartupRegistration startup)
     {
@@ -33,7 +35,7 @@ public sealed partial class TrayIcon : IDisposable
 
         _sessionItem = AddStatItem();
         _weekItem = AddStatItem();
-        _fableItem = AddStatItem();
+        _modelItem = AddStatItem();
         _menu.Items.Add(new WinForms.ToolStripSeparator());
         _menu.Items.Add("Show UI", null, (_, _) => ShowUiRequested?.Invoke(this, EventArgs.Empty));
         _refreshItem = (WinForms.ToolStripMenuItem)_menu.Items.Add("Refresh now", null, (_, _) => RefreshRequested?.Invoke(this, EventArgs.Empty));
@@ -52,6 +54,7 @@ public sealed partial class TrayIcon : IDisposable
             Visible = true,
         };
         _notifyIcon.MouseUp += OnMouseUp;
+        _notifyIcon.MouseDoubleClick += OnMouseDoubleClick;
         _menu.Opening += OnMenuOpening;
         RefreshStatItems();
     }
@@ -66,21 +69,29 @@ public sealed partial class TrayIcon : IDisposable
     public void SetRefreshing(bool refreshing) => _refreshItem.Enabled = !refreshing;
 
     /// <summary>
-    /// Shows the last known snapshot in the stat items. With <paramref name="hasError"/> the tooltip switches to
-    /// the error text, while the menu keeps showing the last known values.
+    /// Shows the last known snapshot in the icon, tooltip and stat items. With <paramref name="hasError"/> the last
+    /// known values stay, marked as stale (tooltip prefix, red dot on the icon); "!" only when there is no data.
     /// </summary>
     public void Update(UsageSnapshot? snapshot, bool hasError = false)
     {
         _snapshot = snapshot;
-        _notifyIcon.Text = UsageText.Truncate(hasError ? UsageText.ErrorTooltip : UsageText.Tooltip(snapshot));
+        _notifyIcon.Text = UsageText.Truncate(UsageText.Tooltip(snapshot, hasError));
         RefreshStatItems();
         UpdateIcon(snapshot, hasError);
     }
 
+    /// <summary>Hides and disposes the icon. Safe to call more than once (also from the crash handler).</summary>
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
         _notifyIcon.Visible = false;
         _notifyIcon.MouseUp -= OnMouseUp;
+        _notifyIcon.MouseDoubleClick -= OnMouseDoubleClick;
         _menu.Opening -= OnMenuOpening;
         _notifyIcon.Dispose();
         _menu.Dispose();
@@ -129,7 +140,7 @@ public sealed partial class TrayIcon : IDisposable
     private void UpdateIcon(UsageSnapshot? snapshot, bool hasError)
     {
         int? highest = null;
-        foreach (var bucket in new[] { snapshot?.Session, snapshot?.Week, snapshot?.FableWeek })
+        foreach (var bucket in new[] { snapshot?.Session, snapshot?.Week, snapshot?.ModelWeek })
         {
             if (bucket is not null)
             {
@@ -168,9 +179,17 @@ public sealed partial class TrayIcon : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool DestroyIcon(nint handle);
 
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetForegroundWindow(nint handle);
+
+    /// <summary>
+    /// A stat line: enabled so it renders in normal (readable) text rather than greyed out, but it has no click
+    /// action; clicking it just closes the menu.
+    /// </summary>
     private WinForms.ToolStripMenuItem AddStatItem()
     {
-        var item = new WinForms.ToolStripMenuItem { Enabled = false };
+        var item = new WinForms.ToolStripMenuItem();
         _menu.Items.Add(item);
         return item;
     }
@@ -187,7 +206,17 @@ public sealed partial class TrayIcon : IDisposable
         var now = DateTimeOffset.Now;
         _sessionItem.Text = UsageText.MenuLine("Session", _snapshot?.Session, now);
         _weekItem.Text = UsageText.MenuLine("Week", _snapshot?.Week, now);
-        _fableItem.Text = UsageText.MenuLine("Fable week", _snapshot?.FableWeek, now);
+        _modelItem.Text = UsageText.MenuLine(
+            _snapshot?.ModelWeekLabel ?? UsageSnapshot.DefaultModelWeekLabel, _snapshot?.ModelWeek, now);
+    }
+
+    private void OnMouseDoubleClick(object? sender, WinForms.MouseEventArgs e)
+    {
+        // A double click raises MouseUp twice; the first already opened the menu.
+        if (e.Button == WinForms.MouseButtons.Left)
+        {
+            _ignoreNextMouseUp = true;
+        }
     }
 
     private void OnMouseUp(object? sender, WinForms.MouseEventArgs e)
@@ -198,12 +227,25 @@ public sealed partial class TrayIcon : IDisposable
             return;
         }
 
+        if (_ignoreNextMouseUp)
+        {
+            _ignoreNextMouseUp = false;
+            return;
+        }
+
+        if (_menu.Visible)
+        {
+            return;
+        }
+
         if (s_showContextMenu is not null)
         {
             s_showContextMenu.Invoke(_notifyIcon, null);
         }
         else
         {
+            // Without foreground activation the menu would not close when the user clicks elsewhere.
+            SetForegroundWindow(_menu.Handle);
             _menu.Show(WinForms.Cursor.Position);
         }
     }

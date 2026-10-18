@@ -10,8 +10,10 @@ public static partial class UsageOutputParser
         ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
     /// <summary>
-    /// Parses the session / week / Fable-week lines. Missing lines give null buckets; throws
-    /// <see cref="UsageParseException"/> only when none of the three lines is found.
+    /// Parses the session, week (all models) and per-model week lines. The per-model line is whichever
+    /// "Current week (&lt;name&gt;)" line comes first that is not "all models"; its name ends up in
+    /// <see cref="UsageSnapshot.ModelName"/>. Further per-model lines are ignored. Missing lines give null buckets;
+    /// throws <see cref="UsageParseException"/> only when none of the three lines is found.
     /// </summary>
     /// <param name="text">The usage text.</param>
     /// <param name="now">Used for year inference of the reset dates and as the snapshot time.</param>
@@ -21,7 +23,8 @@ public static partial class UsageOutputParser
         ArgumentNullException.ThrowIfNull(text);
         defaultZone ??= TimeZoneInfo.Local;
 
-        UsageBucket? session = null, week = null, fable = null;
+        UsageBucket? session = null, week = null, modelWeek = null;
+        string? modelName = null;
         foreach (var rawLine in text.Split('\n'))
         {
             var match = LineRegex().Match(rawLine.Trim());
@@ -31,30 +34,39 @@ public static partial class UsageOutputParser
             }
 
             var bucket = ParseBucket(match, now, defaultZone);
-            var label = WhitespaceRegex().Replace(match.Groups["label"].Value, "").ToUpperInvariant();
-            switch (label)
+            if (!match.Groups["model"].Success)
             {
-                case "SESSION":
-                    session ??= bucket;
-                    break;
-                case "WEEK(ALLMODELS)":
-                    week ??= bucket;
-                    break;
-                case "WEEK(FABLE)":
-                    fable ??= bucket;
-                    break;
+                session ??= bucket;
+                continue;
+            }
+
+            var model = WhitespaceRegex().Replace(match.Groups["model"].Value.Trim(), " ");
+            if (string.Equals(model, "all models", StringComparison.OrdinalIgnoreCase))
+            {
+                week ??= bucket;
+            }
+            else if (modelWeek is null && model.Length > 0)
+            {
+                modelWeek = bucket;
+                modelName = model;
             }
         }
 
-        if (session is null && week is null && fable is null)
+        if (session is null && week is null && modelWeek is null)
         {
             throw new UsageParseException("Could not find any usage lines in the /usage output.") { RawText = text };
         }
 
-        return new UsageSnapshot(now, session, week, fable, text);
+        return new UsageSnapshot(now, session, week, modelWeek, text, modelName);
     }
 
     /// <summary>Converts a wall-clock time in <paramref name="zone"/> to an absolute time, DST-aware.</summary>
+    /// <remarks>
+    /// DST assumptions (the CLI prints wall times only, so these are guesses): a time skipped by a spring-forward
+    /// transition is moved forward by one hour, which assumes the usual 1-hour shift; an ambiguous time in the
+    /// repeated fall-back hour is taken as the first occurrence (still on summer time), i.e. the earlier instant,
+    /// so a countdown never overshoots the real reset.
+    /// </remarks>
     public static DateTimeOffset ToZoned(DateTime wall, TimeZoneInfo zone)
     {
         ArgumentNullException.ThrowIfNull(zone);
@@ -145,28 +157,33 @@ public static partial class UsageOutputParser
             return null;
         }
 
-        // Current year; if that is more than a day in the past, it means next year.
+        // No year in the text: try last, this and next year and take the earliest that is at most a day in the
+        // past (a reset just passed is still reported for a while). Handles both directions around New Year:
+        // "Jan 1" seen on Dec 31 is next year, "Dec 31, 11pm" seen just after midnight on Jan 1 is last year.
         int thisYear = nowInZone.Year;
-        for (int year = thisYear; year <= thisYear + 1; year++)
+        var earliestAllowed = now.AddDays(-1);
+        DateTimeOffset? best = null;
+        for (int year = thisYear - 1; year <= thisYear + 1; year++)
         {
             if (day > DateTime.DaysInMonth(year, month))
             {
                 continue;
             }
 
-            var result = ToZoned(new DateTime(year, month, day, hour, minute, 0, DateTimeKind.Unspecified), zone);
-            if (result >= now.AddDays(-1) || year == thisYear + 1)
+            var candidate = ToZoned(new DateTime(year, month, day, hour, minute, 0, DateTimeKind.Unspecified), zone);
+            if (candidate >= earliestAllowed && (best is null || candidate < best))
             {
-                return result;
+                best = candidate;
             }
         }
 
-        return null;
+        return best;
     }
 
     // "Current session: 3% used · resets Oct 19, 2am (Europe/Brussels)"; the reset part and zone are optional.
+    // Week lines carry a model in parentheses: "Current week (all models)", "Current week (Fable)", ...
     [GeneratedRegex(
-        @"^Current\s+(?<label>session|week\s*\(\s*all\s+models\s*\)|week\s*\(\s*Fable\s*\))\s*:\s*(?<pct>\d+)\s*%\s*used" +
+        @"^Current\s+(?:session|week\s*\((?<model>[^)]+)\))\s*:\s*(?<pct>\d+)\s*%\s*used" +
         @"(?:\s*[·•,\-]?\s*resets?\s+(?<when>.+?)(?:\s*\((?<tz>[^()]+)\))?)?\s*$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex LineRegex();

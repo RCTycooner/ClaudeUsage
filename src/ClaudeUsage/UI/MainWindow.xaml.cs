@@ -3,25 +3,32 @@ using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using ClaudeUsage.Storage;
+using ClaudeUsage.Tray;
 
 namespace ClaudeUsage.UI;
 
 public partial class MainWindow : Window
 {
-    private const double MinVisiblePixels = 40;
+    /// <summary>Height used for the on-screen test; the real height is content-sized and unknown before layout.</summary>
+    private const double NominalHeight = 120;
 
     private readonly SettingsStore _store;
     private readonly MainViewModel _viewModel;
     private readonly bool _loaded;
+    private AppSettings _settings;
 
-    public MainWindow(SettingsStore store, MainViewModel viewModel)
+    /// <param name="store">Where position and stay-on-top are saved.</param>
+    /// <param name="settings">Settings as loaded once at startup; the window keeps its own copy from here on.</param>
+    /// <param name="viewModel">The view model.</param>
+    public MainWindow(SettingsStore store, AppSettings settings, MainViewModel viewModel)
     {
+        ArgumentNullException.ThrowIfNull(settings);
         _store = store;
+        _settings = settings;
         _viewModel = viewModel;
         InitializeComponent();
         DataContext = viewModel;
 
-        var settings = store.Load();
         Topmost = settings.Topmost;
         PlaceWindow(settings);
         _loaded = true;
@@ -44,13 +51,22 @@ public partial class MainWindow : Window
 
     public void SaveNow() => _store.Save(CurrentSettings());
 
-    private AppSettings CurrentSettings() =>
-        new(Topmost, Left, Top, _store.Load().ClaudePath);
+    /// <summary>
+    /// The kept settings with the current position and stay-on-top; no disk read. Left/Top are NaN until a
+    /// centred window is first shown (e.g. started with --hidden); the saved position is kept then.
+    /// </summary>
+    private AppSettings CurrentSettings() => _settings = _settings with
+    {
+        Left = double.IsNaN(Left) ? _settings.Left : Left,
+        Top = double.IsNaN(Top) ? _settings.Top : Top,
+        Topmost = Topmost,
+    };
 
     private void PlaceWindow(AppSettings settings)
     {
         // Width is fixed; height is content-sized, so use a nominal height for the visibility test.
-        if (settings.Left is double left && settings.Top is double top && IsOnScreen(left, top))
+        if (settings.Left is double left && settings.Top is double top
+            && WindowPlacement.IsReachable(new Rect(left, top, Width, NominalHeight), ScreenAreas.WorkingAreas()))
         {
             Left = left;
             Top = top;
@@ -58,19 +74,6 @@ public partial class MainWindow : Window
         }
 
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-    }
-
-    private bool IsOnScreen(double left, double top)
-    {
-        double vLeft = SystemParameters.VirtualScreenLeft;
-        double vTop = SystemParameters.VirtualScreenTop;
-        double vRight = vLeft + SystemParameters.VirtualScreenWidth;
-        double vBottom = vTop + SystemParameters.VirtualScreenHeight;
-
-        return left + Width > vLeft + MinVisiblePixels
-            && left < vRight - MinVisiblePixels
-            && top >= vTop
-            && top < vBottom - MinVisiblePixels;
     }
 
     private void OnBodyMouseLeftButtonDown(object sender, MouseButtonEventArgs e)

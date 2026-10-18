@@ -53,7 +53,7 @@ public sealed class MainViewModelTests
     [Fact]
     public void Missing_bucket_shows_a_dash()
     {
-        var row = new BucketRow("Fable week", Palette.FableSeries);
+        var row = new BucketRow("Fable week", Palette.ModelSeries);
         row.Update(new UsageBucket(50, null), s_now);
 
         row.Update(null, s_now);
@@ -71,13 +71,25 @@ public sealed class MainViewModelTests
 
         state.SetSnapshot(Snapshot(3, 17, null), []);
 
-        Assert.Equal(["Session", "Week", "Fable week"], vm.Rows.Select(r => r.Label));
+        Assert.Equal(["Session", "Week", "Model week"], vm.Rows.Select(r => r.Label));
         Assert.Equal("3 %", vm.Session.PercentText);
         Assert.Equal("resets in 4h 55m", vm.Session.Countdown);
-        Assert.Equal("—", vm.FableWeek.PercentText);
+        Assert.Equal("—", vm.ModelWeek.PercentText);
         Assert.Equal("updated 12 s ago", vm.FooterText);
         Assert.False(vm.IsError);
         Assert.Equal("", vm.FooterHint);
+    }
+
+    [Fact]
+    public void Model_row_is_labelled_with_the_model_name()
+    {
+        var state = new UsageState();
+        var vm = new MainViewModel(state, () => s_now);
+
+        state.SetSnapshot(Snapshot(3, 17, 40) with { ModelName = "Opus" }, []);
+
+        Assert.Equal("Opus week", vm.ModelWeek.Label);
+        Assert.Equal("40 %", vm.ModelWeek.PercentText);
     }
 
     [Fact]

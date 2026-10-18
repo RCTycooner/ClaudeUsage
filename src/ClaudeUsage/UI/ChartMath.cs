@@ -55,7 +55,7 @@ public static class ChartMath
     {
         ArgumentNullException.ThrowIfNull(samples);
         return samples.Count(s => s.Taken >= from && s.Taken <= to
-            && (s.Session is not null || s.Week is not null || s.FableWeek is not null));
+            && (s.Session is not null || s.Week is not null || s.ModelWeek is not null));
     }
 
     /// <summary>Maps a time to an x coordinate: <paramref name="from"/> is the left edge, <paramref name="to"/> the right.</summary>

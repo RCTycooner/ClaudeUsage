@@ -22,7 +22,7 @@ public static class SnapshotRenderer
 
         var viewModel = new MainViewModel(state, () => now);
         using var store = new SettingsStore(Path.Combine(Path.GetTempPath(), "ClaudeUsage-snapshot"));
-        var window = new MainWindow(store, viewModel);
+        var window = new MainWindow(store, new AppSettings(), viewModel);
 
         // Render the window's content tree on its own; the window itself is never shown.
         var root = (FrameworkElement)window.Content;
@@ -104,7 +104,8 @@ public static class SnapshotRenderer
                 (int)Math.Min(fable, 104),
                 sessionStart.AddHours(5),
                 weekReset.AddDays(7),
-                weekReset.AddDays(7)));
+                weekReset.AddDays(7),
+                "Fable"));
         }
 
         return samples;

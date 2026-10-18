@@ -49,8 +49,8 @@ public sealed class UsageHistoryStoreTests : IDisposable
             new DateTimeOffset(2026, 10, 19, 2, 0, 0, s_cest),
             new DateTimeOffset(2026, 10, 20, 10, 0, 0, s_cest),
             new DateTimeOffset(2026, 10, 20, 10, 0, 0, s_cest)), loaded[0]);
-        Assert.Null(loaded[1].FableWeek);
-        Assert.Null(loaded[1].FableWeekResetsAt);
+        Assert.Null(loaded[1].ModelWeek);
+        Assert.Null(loaded[1].ModelWeekResetsAt);
         Assert.Equal(loaded, store.Samples);
     }
 
@@ -118,6 +118,43 @@ public sealed class UsageHistoryStoreTests : IDisposable
 
         Assert.Equal(2, loaded.Count);
         Assert.Equal(_now, loaded[1].Taken);
+
+        // The file was rewritten without the bad lines.
+        var lines = File.ReadAllLines(path);
+        Assert.Equal(2, lines.Length);
+        Assert.All(lines, l => Assert.NotNull(UsageHistoryStore.TryParseLine(l)));
+        Assert.Equal(lines.Select(UsageHistoryStore.TryParseLine), loaded);
+    }
+
+    [Fact]
+    public void Model_name_round_trips_and_old_lines_read_as_model_week()
+    {
+        var store = CreateStore();
+        store.Append(Snapshot(_now) with { ModelName = "Opus" });
+
+        var line = Assert.Single(File.ReadAllLines(store.Path));
+        Assert.Contains("\"m\":\"Opus\"", line, StringComparison.Ordinal);
+        Assert.Equal("Opus week", CreateStore().Load()[0].ToSnapshot().ModelWeekLabel);
+
+        var old = UsageHistoryStore.TryParseLine("""{"t":"2026-10-18T21:05:12+02:00","f":22}""")!;
+        Assert.Equal("Model week", old.ToSnapshot().ModelWeekLabel);
+        Assert.Equal(22, old.ToSnapshot().ModelWeek!.Percent);
+    }
+
+    [Fact]
+    public void Writes_utf8_without_bom_and_reads_files_with_one()
+    {
+        var store = CreateStore();
+        store.Append(Snapshot(_now));
+        Assert.False(File.ReadAllBytes(store.Path) is [0xEF, 0xBB, 0xBF, ..]);
+
+        File.WriteAllText(
+            store.Path,
+            UsageHistoryStore.FormatLine(UsageSample.FromSnapshot(Snapshot(_now))) + "\n",
+            new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+
+        Assert.Single(CreateStore().Load());
+        Assert.False(File.ReadAllBytes(store.Path) is [0xEF, 0xBB, 0xBF, ..]);
     }
 
     [Fact]
@@ -129,6 +166,6 @@ public sealed class UsageHistoryStoreTests : IDisposable
 
         Assert.Equal(3, snapshot.Session!.Percent);
         Assert.Equal(new DateTimeOffset(2026, 10, 20, 10, 0, 0, s_cest), snapshot.Week!.ResetsAt);
-        Assert.Null(snapshot.FableWeek);
+        Assert.Null(snapshot.ModelWeek);
     }
 }

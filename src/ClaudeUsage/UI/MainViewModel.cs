@@ -33,12 +33,14 @@ public sealed class BucketRow(string label, Brush swatch) : ObservableObject
 {
     public const string Missing = "—";
 
+    private string _label = label;
     private string _percentText = Missing;
     private double _barValue;
     private Brush _barBrush = Palette.Ok;
     private string _countdown = "";
 
-    public string Label { get; } = label;
+    /// <summary>Row label; the per-model row follows the model name in the latest snapshot ("Fable week").</summary>
+    public string Label { get => _label; set => Set(ref _label, value); }
 
     /// <summary>Series colour; the swatch makes the rows double as the chart legend.</summary>
     public Brush Swatch { get; } = swatch;
@@ -105,8 +107,8 @@ public sealed class MainViewModel : ObservableObject
 
         Session = new BucketRow("Session", Palette.SessionSeries);
         Week = new BucketRow("Week", Palette.WeekSeries);
-        FableWeek = new BucketRow("Fable week", Palette.FableSeries);
-        Rows = [Session, Week, FableWeek];
+        ModelWeek = new BucketRow(UsageSnapshot.DefaultModelWeekLabel, Palette.ModelSeries);
+        Rows = [Session, Week, ModelWeek];
 
         _state.Changed += (_, _) => Refresh();
         Refresh();
@@ -116,7 +118,7 @@ public sealed class MainViewModel : ObservableObject
 
     public BucketRow Week { get; }
 
-    public BucketRow FableWeek { get; }
+    public BucketRow ModelWeek { get; }
 
     public IReadOnlyList<BucketRow> Rows { get; }
 
@@ -156,7 +158,11 @@ public sealed class MainViewModel : ObservableObject
         var latest = _state.Latest;
         Session.Update(latest?.Session, now);
         Week.Update(latest?.Week, now);
-        FableWeek.Update(latest?.FableWeek, now);
+        ModelWeek.Update(latest?.ModelWeek, now);
+        if (latest is not null)
+        {
+            ModelWeek.Label = latest.ModelWeekLabel;
+        }
 
         if (_state.LastError is { } error)
         {

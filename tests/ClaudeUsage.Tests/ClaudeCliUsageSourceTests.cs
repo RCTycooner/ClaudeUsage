@@ -58,6 +58,85 @@ public sealed class ClaudeCliUsageSourceTests
     }
 
     [Fact]
+    public void ParseEnvelope_skips_a_leading_banner_line()
+    {
+        const string stdout = "Update available: 2.2.0 (run claude update)\r\n" +
+            """{"type":"result","is_error":false,"result":"Current session: 3% used"}""" + "\r\n";
+
+        Assert.Equal("Current session: 3% used", ClaudeCliUsageSource.ParseEnvelope(stdout));
+    }
+
+    [Fact]
+    public void ParseEnvelope_takes_the_last_result_line_and_ignores_other_json_lines()
+    {
+        const string stdout = """
+            {"type":"system","subtype":"init"}
+            {"type":"result","is_error":false,"result":"first"}
+            {"type":"result","is_error":false,"result":"last"}
+            {"type":"log","message":"bye"}
+            """;
+
+        Assert.Equal("last", ClaudeCliUsageSource.ParseEnvelope(stdout));
+    }
+
+    [Fact]
+    public void ParseEnvelope_fallback_still_honours_is_error()
+    {
+        const string stdout = "banner\n" + """{"type":"result","is_error":true,"result":"Not logged in"}""";
+
+        var ex = Assert.Throws<UsageSourceException>(() => ClaudeCliUsageSource.ParseEnvelope(stdout));
+
+        Assert.Contains("reported an error", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SanitizeEnvironment_removes_session_variables_and_disables_updater()
+    {
+        var env = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["CLAUDECODE"] = "1",
+            ["CLAUDE_CODE_ENTRYPOINT"] = "cli",
+            ["CLAUDE_CODE_SESSION_ID"] = "abc",
+            ["CLAUDE_CODE_SSE_PORT"] = "1234",
+            ["CLAUDE_CODE_MESSAGING_SOCKET"] = "x",
+            ["CLAUDE_PID"] = "42",
+            ["CLAUDE_CODE_GIT_BASH_PATH"] = @"C:\Git\bin\bash.exe",
+            ["CLAUDE_CODE_USE_BEDROCK"] = "1",
+            ["PATH"] = @"C:\Windows",
+        };
+
+        ClaudeCliUsageSource.SanitizeEnvironment(env);
+
+        Assert.Equal(
+            ["CLAUDE_CODE_GIT_BASH_PATH", "CLAUDE_CODE_USE_BEDROCK", "DISABLE_AUTOUPDATER", "PATH"],
+            env.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal("1", env["DISABLE_AUTOUPDATER"]);
+    }
+
+    [Fact]
+    public void CreateStartInfo_runs_exe_directly()
+    {
+        var psi = ClaudeCliUsageSource.CreateStartInfo(@"C:\Users\me\.local\bin\claude.exe", @"C:\data");
+
+        Assert.Equal(@"C:\Users\me\.local\bin\claude.exe", psi.FileName);
+        Assert.Equal(["-p", "/usage", "--output-format", "json", "--no-session-persistence"], psi.ArgumentList);
+        Assert.False(psi.UseShellExecute);
+        Assert.True(psi.CreateNoWindow);
+    }
+
+    [Fact]
+    public void CreateStartInfo_runs_cmd_shim_through_cmd_exe_with_quoting()
+    {
+        var psi = ClaudeCliUsageSource.CreateStartInfo(@"C:\Users\Jane Doe\AppData\Roaming\npm\claude.cmd", @"C:\data");
+
+        Assert.EndsWith("cmd.exe", psi.FileName, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(psi.ArgumentList);
+        Assert.Equal(
+            "/d /s /c \"\"C:\\Users\\Jane Doe\\AppData\\Roaming\\npm\\claude.cmd\" -p /usage --output-format json --no-session-persistence\"",
+            psi.Arguments);
+    }
+
+    [Fact]
     public void ResolveExe_prefers_existing_override()
     {
         var file = Path.GetTempFileName();

@@ -54,7 +54,7 @@ public sealed class FileLogger
                     File.Move(Path, System.IO.Path.Combine(_folder, "log.old.txt"), overwrite: true);
                 }
 
-                File.AppendAllText(Path, sb.ToString(), Encoding.UTF8);
+                File.AppendAllText(Path, sb.ToString(), TextFiles.Utf8NoBom);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

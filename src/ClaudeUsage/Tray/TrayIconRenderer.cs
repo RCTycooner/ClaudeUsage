@@ -12,22 +12,20 @@ public static class TrayIconRenderer
     private static readonly Drawing.Color s_critical = Drawing.Color.FromArgb(0xDC, 0x26, 0x26);
     private static readonly Drawing.Color s_neutral = Drawing.Color.FromArgb(0x6B, 0x72, 0x80);
 
+    private static readonly Drawing.Color s_errorDot = Drawing.Color.FromArgb(0xEF, 0x44, 0x44);
+
     /// <summary>
-    /// Renders the icon. <paramref name="percent"/> null means no data ("?"); <paramref name="hasError"/> shows "!".
-    /// The percentage is clamped to 0-100.
+    /// Renders the icon. <paramref name="percent"/> null means no data: "?" or, with <paramref name="hasError"/>, "!".
+    /// With a percentage and <paramref name="hasError"/> the last known number stays and a red dot in the top-right
+    /// corner marks it as stale. The percentage is clamped to 0-100.
     /// </summary>
     public static Drawing.Bitmap Render(int? percent, bool hasError, Drawing.Size size)
     {
         string text;
         Drawing.Color background;
-        if (hasError)
+        if (percent is null)
         {
-            text = "!";
-            background = s_neutral;
-        }
-        else if (percent is null)
-        {
-            text = "?";
+            text = hasError ? "!" : "?";
             background = s_neutral;
         }
         else
@@ -68,6 +66,18 @@ public static class TrayIconRenderer
         var foreground = background == s_warning ? Drawing.Color.Black : Drawing.Color.White;
         using var textBrush = new Drawing.SolidBrush(foreground);
         g.DrawString(text, font, textBrush, new Drawing.RectangleF(0, 0, w, h), format);
+
+        if (hasError && percent is not null)
+        {
+            // Stale marker: red dot with a white ring so it also shows on the red (critical) background.
+            float d = Math.Max(5f, w * 0.42f);
+            float ring = Math.Max(1f, w / 16f);
+            using var ringBrush = new Drawing.SolidBrush(Drawing.Color.White);
+            using var dotBrush = new Drawing.SolidBrush(s_errorDot);
+            g.FillEllipse(ringBrush, w - d, 0, d, d);
+            g.FillEllipse(dotBrush, w - d + ring, ring, d - (2 * ring), d - (2 * ring));
+        }
+
         return bitmap;
     }
 

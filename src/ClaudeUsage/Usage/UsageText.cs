@@ -10,23 +10,33 @@ public static class UsageText
 
     public const string ErrorTooltip = "Claude usage: error — see window";
 
+    /// <summary>Prefix for the tooltip when the last poll failed but older values are still shown.</summary>
+    public const string StalePrefix = "⚠ last poll failed — ";
+
     public const string WaitingTooltip = "Claude usage: waiting for data";
 
     public static int DisplayPercent(int percent) => Math.Clamp(percent, 0, 100);
 
-    /// <summary>"Claude: S 3% · W 17% · F 22%"; missing buckets are left out.</summary>
-    public static string Tooltip(UsageSnapshot? snapshot)
+    /// <summary>
+    /// "Claude: S 3% · W 17% · F 22%" (the last key is the model's initial, "M" when unknown); missing buckets are
+    /// left out. With <paramref name="hasError"/> the last known values stay, behind <see cref="StalePrefix"/>;
+    /// <see cref="ErrorTooltip"/> only when there were never any values.
+    /// </summary>
+    public static string Tooltip(UsageSnapshot? snapshot, bool hasError = false)
     {
         if (snapshot is null)
         {
-            return WaitingTooltip;
+            return hasError ? ErrorTooltip : WaitingTooltip;
         }
 
         var parts = new List<string>(3);
         Add(parts, "S", snapshot.Session);
         Add(parts, "W", snapshot.Week);
-        Add(parts, "F", snapshot.FableWeek);
-        return Truncate("Claude: " + string.Join(" · ", parts));
+        var modelKey = string.IsNullOrWhiteSpace(snapshot.ModelName)
+            ? "M"
+            : char.ToUpperInvariant(snapshot.ModelName.Trim()[0]).ToString();
+        Add(parts, modelKey, snapshot.ModelWeek);
+        return Truncate((hasError ? StalePrefix : "") + "Claude: " + string.Join(" · ", parts));
 
         static void Add(List<string> parts, string key, UsageBucket? bucket)
         {

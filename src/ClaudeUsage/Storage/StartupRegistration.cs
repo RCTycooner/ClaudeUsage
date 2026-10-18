@@ -10,29 +10,37 @@ public interface IStartupRegistration
     void SetEnabled(bool enabled);
 }
 
-/// <summary>Start-with-Windows via a value in an HKCU <c>Run</c> key. The key path is injectable for tests.</summary>
+/// <summary>
+/// Start-with-Windows via a value in an HKCU <c>Run</c> key: <c>"&lt;exe&gt;" --hidden</c>, so the app starts in the
+/// tray. Counts as enabled only when the stored command is exactly that (an entry left by a moved or renamed exe
+/// reads as disabled, and enabling rewrites it). The key path is injectable for tests.
+/// </summary>
 public sealed class RunKeyStartupRegistration : IStartupRegistration
 {
     public const string DefaultKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     public const string DefaultValueName = "ClaudeUsage";
+    public const string HiddenArgument = "--hidden";
 
     private readonly string _keyPath;
     private readonly string _valueName;
-    private readonly string _exePath;
 
     public RunKeyStartupRegistration(string? exePath = null, string keyPath = DefaultKeyPath, string valueName = DefaultValueName)
     {
-        _exePath = exePath ?? Environment.ProcessPath ?? string.Empty;
+        Command = $"\"{exePath ?? Environment.ProcessPath ?? string.Empty}\" {HiddenArgument}";
         _keyPath = keyPath;
         _valueName = valueName;
     }
+
+    /// <summary>The value written to the Run key.</summary>
+    public string Command { get; }
 
     public bool IsEnabled
     {
         get
         {
             using var key = Registry.CurrentUser.OpenSubKey(_keyPath);
-            return key?.GetValue(_valueName) is string;
+            return key?.GetValue(_valueName) is string value
+                && string.Equals(value.Trim(), Command, StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -41,7 +49,7 @@ public sealed class RunKeyStartupRegistration : IStartupRegistration
         if (enabled)
         {
             using var key = Registry.CurrentUser.CreateSubKey(_keyPath);
-            key.SetValue(_valueName, $"\"{_exePath}\"", RegistryValueKind.String);
+            key.SetValue(_valueName, Command, RegistryValueKind.String);
         }
         else
         {

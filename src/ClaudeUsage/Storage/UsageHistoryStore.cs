@@ -11,10 +11,11 @@ public sealed record UsageSample(
     DateTimeOffset Taken,
     int? Session,
     int? Week,
-    int? FableWeek,
+    int? ModelWeek,
     DateTimeOffset? SessionResetsAt,
     DateTimeOffset? WeekResetsAt,
-    DateTimeOffset? FableWeekResetsAt)
+    DateTimeOffset? ModelWeekResetsAt,
+    string? ModelName = null)
 {
     public static UsageSample FromSnapshot(UsageSnapshot snapshot)
     {
@@ -27,18 +28,20 @@ public sealed record UsageSample(
             taken,
             snapshot.Session?.Percent,
             snapshot.Week?.Percent,
-            snapshot.FableWeek?.Percent,
+            snapshot.ModelWeek?.Percent,
             snapshot.Session?.ResetsAt,
             snapshot.Week?.ResetsAt,
-            snapshot.FableWeek?.ResetsAt);
+            snapshot.ModelWeek?.ResetsAt,
+            snapshot.ModelWeek is null ? null : snapshot.ModelName);
     }
 
     public UsageSnapshot ToSnapshot() => new(
         Taken,
         Session is { } s ? new UsageBucket(s, SessionResetsAt) : null,
         Week is { } w ? new UsageBucket(w, WeekResetsAt) : null,
-        FableWeek is { } f ? new UsageBucket(f, FableWeekResetsAt) : null,
-        RawText: "");
+        ModelWeek is { } f ? new UsageBucket(f, ModelWeekResetsAt) : null,
+        RawText: "",
+        ModelName);
 }
 
 /// <summary>
@@ -106,6 +109,9 @@ public sealed class UsageHistoryStore
             {
                 if (File.Exists(Path))
                 {
+                    // A BOM from an older version is read fine, but rewrite the file once to drop it.
+                    dirty = StartsWithBom(Path);
+                    // Encoding.UTF8 on read still detects and skips a BOM written by older versions.
                     foreach (var line in File.ReadLines(Path, Encoding.UTF8))
                     {
                         if (string.IsNullOrWhiteSpace(line))
@@ -141,7 +147,7 @@ public sealed class UsageHistoryStore
         lock (_gate)
         {
             _samples.Add(sample);
-            TryWrite(() => File.AppendAllText(Path, FormatLine(sample) + "\n", Encoding.UTF8));
+            TryWrite(() => File.AppendAllText(Path, FormatLine(sample) + "\n", TextFiles.Utf8NoBom));
             if (_clock() - _lastPrune >= s_pruneEvery)
             {
                 PruneLocked(rewriteAlways: false);
@@ -168,10 +174,11 @@ public sealed class UsageHistoryStore
             T = sample.Taken,
             S = sample.Session,
             W = sample.Week,
-            F = sample.FableWeek,
+            F = sample.ModelWeek,
             Sr = sample.SessionResetsAt,
             Wr = sample.WeekResetsAt,
-            Fr = sample.FableWeekResetsAt,
+            Fr = sample.ModelWeekResetsAt,
+            M = sample.ModelName,
         };
         return JsonSerializer.Serialize(dto, s_json);
     }
@@ -182,7 +189,7 @@ public sealed class UsageHistoryStore
         {
             var dto = JsonSerializer.Deserialize<Line>(line, s_json);
             return dto?.T is { } t
-                ? new UsageSample(t, dto.S, dto.W, dto.F, dto.Sr, dto.Wr, dto.Fr)
+                ? new UsageSample(t, dto.S, dto.W, dto.F, dto.Sr, dto.Wr, dto.Fr, dto.M)
                 : null;
         }
         catch (JsonException)
@@ -205,13 +212,15 @@ public sealed class UsageHistoryStore
                 text.Append(FormatLine(s)).Append('\n');
             }
 
-            var temp = Path + ".tmp";
-            TryWrite(() =>
-            {
-                File.WriteAllText(temp, text.ToString(), Encoding.UTF8);
-                File.Move(temp, Path, overwrite: true);
-            });
+            TryWrite(() => TextFiles.WriteAllTextAtomic(Path, text.ToString()));
         }
+    }
+
+    private static bool StartsWithBom(string path)
+    {
+        Span<byte> head = stackalloc byte[3];
+        using var stream = File.OpenRead(path);
+        return stream.ReadAtLeast(head, 3, throwOnEndOfStream: false) == 3 && head is [0xEF, 0xBB, 0xBF];
     }
 
     private void TryWrite(Action write)
@@ -249,5 +258,9 @@ public sealed class UsageHistoryStore
 
         [JsonPropertyName("fr")]
         public DateTimeOffset? Fr { get; set; }
+
+        /// <summary>Name of the per-model bucket ("Fable"); absent in older lines, which then read as "Model week".</summary>
+        [JsonPropertyName("m")]
+        public string? M { get; set; }
     }
 }
