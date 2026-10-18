@@ -57,9 +57,10 @@ public partial class App : Application, IDisposable
         var viewModel = new MainViewModel(UsageState);
         viewModel.Start();
         _window = new MainWindow(_settingsStore, viewModel);
-        _tray = new TrayIcon();
+        _tray = new TrayIcon(new RunKeyStartupRegistration());
         _tray.ShowUiRequested += (_, _) => ShowWindow();
         _tray.QuitRequested += (_, _) => Quit();
+        _tray.RefreshRequested += (_, _) => _ = RefreshNowAsync();
 
         // Show the last known values straight away, then start polling (first poll runs immediately).
         _history = new UsageHistoryStore(folder);
@@ -115,6 +116,24 @@ public partial class App : Application, IDisposable
         _logger?.Log(failure.Message, failure.Error, failure.RawText);
         UsageState.SetFailure(failure);
         _tray?.Update(UsageState.Latest, hasError: true);
+    }
+
+    private async Task RefreshNowAsync()
+    {
+        if (_poller is null)
+        {
+            return;
+        }
+
+        _tray?.SetRefreshing(true);
+        try
+        {
+            await _poller.RefreshNowAsync();
+        }
+        finally
+        {
+            _tray?.SetRefreshing(false);
+        }
     }
 
     private void ShowWindow() => _window?.ShowAndActivate();
