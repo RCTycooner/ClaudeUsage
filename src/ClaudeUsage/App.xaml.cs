@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
@@ -37,6 +38,16 @@ public partial class App : Application, IDisposable
         if (e.Args is ["--snapshot", var snapshotPath])
         {
             SnapshotRenderer.Render(snapshotPath);
+            Shutdown();
+            return;
+        }
+
+        // --snapshot-history <path.png> [days]: the same for the history window, showing all or the last [days].
+        if (e.Args is ["--snapshot-history", var historySnapshotPath, .. var rest] && rest.Length <= 1)
+        {
+            SnapshotRenderer.RenderHistory(
+                historySnapshotPath,
+                rest is [var days] && double.TryParse(days, CultureInfo.InvariantCulture, out double d) ? TimeSpan.FromDays(d) : null);
             Shutdown();
             return;
         }

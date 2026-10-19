@@ -68,21 +68,21 @@ public sealed class UsageHistoryStoreTests : IDisposable
     }
 
     [Fact]
-    public void Load_prunes_samples_older_than_8_days_and_rewrites_file()
+    public void Load_prunes_samples_older_than_the_retention_window_and_rewrites_file()
     {
         Directory.CreateDirectory(_folder);
         var path = Path.Combine(_folder, "history.jsonl");
         File.WriteAllLines(path,
         [
-            UsageHistoryStore.FormatLine(UsageSample.FromSnapshot(Snapshot(_now.AddDays(-9)))),
-            UsageHistoryStore.FormatLine(UsageSample.FromSnapshot(Snapshot(_now.AddDays(-7)))),
+            UsageHistoryStore.FormatLine(UsageSample.FromSnapshot(Snapshot(_now - UsageHistoryStore.DefaultRetention - TimeSpan.FromDays(1)))),
+            UsageHistoryStore.FormatLine(UsageSample.FromSnapshot(Snapshot(_now - UsageHistoryStore.DefaultRetention + TimeSpan.FromDays(1)))),
             UsageHistoryStore.FormatLine(UsageSample.FromSnapshot(Snapshot(_now))),
         ]);
 
         var loaded = CreateStore().Load();
 
         Assert.Equal(2, loaded.Count);
-        Assert.Equal(_now.AddDays(-7), loaded[0].Taken);
+        Assert.Equal(_now - UsageHistoryStore.DefaultRetention + TimeSpan.FromDays(1), loaded[0].Taken);
         Assert.Equal(2, File.ReadAllLines(path).Length);
     }
 
@@ -93,7 +93,7 @@ public sealed class UsageHistoryStoreTests : IDisposable
         store.Load();
         store.Append(Snapshot(_now));
 
-        _now = _now.AddDays(9);
+        _now += UsageHistoryStore.DefaultRetention + TimeSpan.FromDays(1);
         store.Append(Snapshot(_now));
 
         Assert.Single(store.Samples);

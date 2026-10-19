@@ -31,7 +31,14 @@ public static class Palette
     public static readonly Brush Warning = Frozen(0xFB, 0xBF, 0x24);
     public static readonly Brush Critical = Frozen(0xF8, 0x71, 0x71);
 
+    public static readonly Brush TextPrimary = Frozen(0xF2, 0xF2, 0xF4);
     public static readonly Brush TextMuted = Frozen(0x9A, 0x9A, 0xA5);
+    public static readonly Brush Panel = Frozen(0x1F, 0x1F, 0x23);
+    public static readonly Brush PanelBorder = Frozen(0x3A, 0x3A, 0x42);
+
+    /// <summary>Chart crosshair read-out: the panel colour, nearly opaque so lines behind it don't show through.</summary>
+    public static readonly Brush Tooltip = Frozen(0x1F, 0x1F, 0x23, 0xF0);
+
     public static readonly Brush GridMajor = Frozen(0x4A, 0x4A, 0x55);
     public static readonly Brush GridMinor = Frozen(0x2E, 0x2E, 0x36);
 

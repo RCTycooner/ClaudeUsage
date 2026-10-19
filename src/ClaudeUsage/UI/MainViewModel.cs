@@ -23,9 +23,12 @@ public abstract class ObservableObject : INotifyPropertyChanged
         }
 
         field = value;
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        Raise(name);
         return true;
     }
+
+    /// <summary>Notifies a change of a computed property.</summary>
+    protected void Raise(string? name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
 
 /// <summary>One stats row: label with its chart colour, bar, "NN %" and "resets in …".</summary>
