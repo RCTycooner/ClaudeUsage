@@ -66,11 +66,13 @@ public partial class App : Application, IDisposable
         bool startHidden = e.Args.Contains(RunKeyStartupRegistration.HiddenArgument, StringComparer.OrdinalIgnoreCase);
 
         _settingsStore = new SettingsStore(folder);
-        var settings = _settingsStore.Load();
+        var startup = new RunKeyStartupRegistration();
+        var settings = ApplyStartWithWindows(startup, _settingsStore.Load());
         var viewModel = new MainViewModel(UsageState);
         viewModel.Start();
         _window = new MainWindow(_settingsStore, settings, viewModel);
-        _tray = new TrayIcon(new RunKeyStartupRegistration());
+        _tray = new TrayIcon(startup);
+        _tray.StartWithWindowsChanged += (_, enabled) => _window.SetStartWithWindows(enabled);
         _tray.ShowUiRequested += (_, _) => ShowWindow();
         _tray.QuitRequested += (_, _) => Quit();
         _tray.RefreshRequested += (_, _) => _ = RefreshNowAsync();
@@ -161,6 +163,29 @@ public partial class App : Application, IDisposable
         _showEvent?.Dispose();
         _showEvent = null;
         return false;
+    }
+
+    /// <summary>
+    /// Makes the Run key match the saved Start-with-Windows choice; a first run with an older settings file adopts
+    /// the current registration and saves it. A registry failure is logged and the settings are kept as they are.
+    /// </summary>
+    private AppSettings ApplyStartWithWindows(IStartupRegistration startup, AppSettings settings)
+    {
+        try
+        {
+            var applied = StartupSync.Apply(startup, settings);
+            if (applied != settings)
+            {
+                _settingsStore?.Save(applied);
+            }
+
+            return applied;
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+        {
+            _logger?.Log("Could not apply the saved Start-with-Windows setting.", ex);
+            return settings;
+        }
     }
 
     /// <summary>Logs anything that would otherwise vanish or kill the app silently.</summary>

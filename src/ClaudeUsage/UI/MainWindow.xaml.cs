@@ -52,6 +52,13 @@ public partial class MainWindow : Window
 
     public void SaveNow() => _store.Save(CurrentSettings());
 
+    /// <summary>Records the Start-with-Windows choice in the kept settings and queues a save.</summary>
+    public void SetStartWithWindows(bool enabled)
+    {
+        _settings = _settings with { StartWithWindows = enabled };
+        QueueSave();
+    }
+
     /// <summary>
     /// The kept settings with the current position and stay-on-top; no disk read. Left/Top are NaN until a
     /// centred window is first shown (e.g. started with --hidden); the saved position is kept then.
