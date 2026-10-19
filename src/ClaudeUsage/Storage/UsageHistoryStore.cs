@@ -50,7 +50,7 @@ public sealed record UsageSample(
 /// </summary>
 public sealed class UsageHistoryStore
 {
-    public static readonly TimeSpan DefaultRetention = TimeSpan.FromDays(8);
+    public static readonly TimeSpan DefaultRetention = TimeSpan.FromDays(90);
 
     private static readonly TimeSpan s_pruneEvery = TimeSpan.FromDays(1);
     private static readonly JsonSerializerOptions s_json = new()

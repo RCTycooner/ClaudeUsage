@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private readonly MainViewModel _viewModel;
     private readonly bool _loaded;
     private AppSettings _settings;
+    private HistoryWindow? _history;
 
     /// <param name="store">Where position and stay-on-top are saved.</param>
     /// <param name="settings">Settings as loaded once at startup; the window keeps its own copy from here on.</param>
@@ -99,6 +100,25 @@ public partial class MainWindow : Window
     private void OnFooterClick(object sender, RoutedEventArgs e) => _viewModel.CopyRawText();
 
     private void OnCloseClick(object sender, RoutedEventArgs e) => Hide();
+
+    /// <summary>Opens the history window, or brings the open one forward.</summary>
+    private void OnHistoryClick(object sender, RoutedEventArgs e)
+    {
+        if (_history is null)
+        {
+            _history = new HistoryWindow(_viewModel);
+            _history.Closed += (_, _) => _history = null;
+            _history.Show();
+            return;
+        }
+
+        if (_history.WindowState == WindowState.Minimized)
+        {
+            _history.WindowState = WindowState.Normal;
+        }
+
+        _history.Activate();
+    }
 
     private void OnPinChanged(object sender, RoutedEventArgs e) => QueueSave();
 

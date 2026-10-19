@@ -6,6 +6,7 @@ A small Windows tray widget that shows your Claude plan usage (session, week, an
 
 - Borderless, draggable window; closing it hides it to the tray.
 - Optional "stay on top"; window position and that setting are remembered.
+- A 7-day chart in the widget. The expand button opens a resizable history window over everything stored (up to 90 days): 1D / 7D / 30D / All presets, zoom (buttons, mouse wheel at the cursor, + / −), scrolling (scroll bar, drag, Shift+wheel, arrow keys), a "Now" button that follows new readings, and a hover read-out of the values at any point.
 - Tray menu: current stats, Show UI, Refresh now, Open data folder, Start with Windows, Quit.
 - Start with Windows adds `"<path>\ClaudeUsage.exe" --hidden` to `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, so it starts in the tray without opening the window. If the exe moves, the menu item shows unchecked; tick it again to update the entry.
 
@@ -29,7 +30,7 @@ Once a minute the app runs `claude -p "/usage" --output-format json --no-session
 
 | File | Contents |
 |---|---|
-| `history.jsonl` | one sample per poll, used for the 7-day chart |
+| `history.jsonl` | one sample per poll, kept for 90 days; used for the charts |
 | `settings.json` | stay-on-top, window position, optional `claude` path override |
 | `log.txt` | errors, unparsable output, crashes, and usage lines that disappeared from the output |
 
@@ -50,3 +51,4 @@ Command-line switches:
 
 - `--hidden` starts in the tray without showing the window (used by Start with Windows).
 - `--snapshot out.png` renders the window with synthetic data to a PNG and exits (debug aid).
+- `--snapshot-history out.png` does the same for the history window, with 30 days of synthetic data.

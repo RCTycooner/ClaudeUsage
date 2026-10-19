@@ -15,90 +15,51 @@
         Closing="OnClosing"
         LocationChanged="OnLocationChanged">
     <Window.Resources>
-        <SolidColorBrush x:Key="Panel" Color="#FF1F1F23" />
-        <SolidColorBrush x:Key="PanelBorder" Color="#FF3A3A42" />
-        <SolidColorBrush x:Key="TextPrimary" Color="#FFF2F2F4" />
-        <SolidColorBrush x:Key="TextMuted" Color="#FF9A9AA5" />
-        <SolidColorBrush x:Key="Accent" Color="#FFD97757" />
-        <SolidColorBrush x:Key="Hover" Color="#33FFFFFF" />
-        <SolidColorBrush x:Key="Track" Color="#FF2E2E36" />
-        <SolidColorBrush x:Key="ErrorText" Color="#FFF87171" />
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Theme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
 
-        <!-- Flat bar: track plus indicator, no Windows theme chrome or animation. -->
-        <Style x:Key="UsageBar" TargetType="ProgressBar">
-            <Setter Property="Height" Value="6" />
-            <Setter Property="Minimum" Value="0" />
-            <Setter Property="Maximum" Value="100" />
-            <Setter Property="Focusable" Value="False" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ProgressBar">
-                        <Grid>
-                            <Border x:Name="PART_Track" CornerRadius="3" Background="{StaticResource Track}" />
-                            <Border x:Name="PART_Indicator" CornerRadius="3" HorizontalAlignment="Left"
-                                    Background="{TemplateBinding Foreground}" />
-                        </Grid>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+            <!-- Flat bar: track plus indicator, no Windows theme chrome or animation. -->
+            <Style x:Key="UsageBar" TargetType="ProgressBar">
+                <Setter Property="Height" Value="6" />
+                <Setter Property="Minimum" Value="0" />
+                <Setter Property="Maximum" Value="100" />
+                <Setter Property="Focusable" Value="False" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ProgressBar">
+                            <Grid>
+                                <Border x:Name="PART_Track" CornerRadius="3" Background="{StaticResource Track}" />
+                                <Border x:Name="PART_Indicator" CornerRadius="3" HorizontalAlignment="Left"
+                                        Background="{TemplateBinding Foreground}" />
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
 
-        <!-- Footer: plain text; clickable (copies raw output) only while enabled. -->
-        <Style x:Key="FooterButton" TargetType="Button">
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="Focusable" Value="False" />
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="Transparent">
-                            <ContentPresenter />
-                        </Border>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsEnabled" Value="True">
-                    <Setter Property="Cursor" Value="Hand" />
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="HeaderButton" TargetType="ButtonBase">
-            <Setter Property="Width" Value="28" />
-            <Setter Property="Height" Value="28" />
-            <Setter Property="Margin" Value="4,0,0,0" />
-            <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Focusable" Value="False" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ButtonBase">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Hover}" />
-                                <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="PinToggle" TargetType="ToggleButton" BasedOn="{StaticResource HeaderButton}">
-            <Style.Triggers>
-                <Trigger Property="IsChecked" Value="True">
-                    <Setter Property="Foreground" Value="{StaticResource Accent}" />
-                    <Setter Property="Background" Value="#33D97757" />
-                </Trigger>
-            </Style.Triggers>
-        </Style>
+            <!-- Footer: plain text; clickable (copies raw output) only while enabled. -->
+            <Style x:Key="FooterButton" TargetType="Button">
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="Focusable" Value="False" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="Transparent">
+                                <ContentPresenter />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="True">
+                        <Setter Property="Cursor" Value="Hand" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+        </ResourceDictionary>
     </Window.Resources>
 
     <Border Background="{StaticResource Panel}"
@@ -112,6 +73,10 @@
         <StackPanel Margin="14,10,10,14">
             <DockPanel LastChildFill="True">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Style="{StaticResource HeaderButton}"
+                            Content="&#xE740;"
+                            ToolTip="Open history (zoom and scroll further back)"
+                            Click="OnHistoryClick" />
                     <ToggleButton x:Name="PinButton"
                                   Style="{StaticResource PinToggle}"
                                   Content="&#xE718;"
