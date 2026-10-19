@@ -58,3 +58,30 @@ public sealed class RunKeyStartupRegistration : IStartupRegistration
         }
     }
 }
+
+/// <summary>Keeps the Run key in line with the Start-with-Windows choice saved in settings.json.</summary>
+public static class StartupSync
+{
+    /// <summary>
+    /// Applies the saved choice to <paramref name="startup"/> and returns the settings to keep. Without a saved
+    /// choice (settings from an older version) the current registration is adopted, so an existing entry survives.
+    /// Re-applying an enabled choice also rewrites an entry left by a moved or renamed exe.
+    /// </summary>
+    public static AppSettings Apply(IStartupRegistration startup, AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(startup);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (settings.StartWithWindows is not bool wanted)
+        {
+            return settings with { StartWithWindows = startup.IsEnabled };
+        }
+
+        if (startup.IsEnabled != wanted)
+        {
+            startup.SetEnabled(wanted);
+        }
+
+        return settings;
+    }
+}

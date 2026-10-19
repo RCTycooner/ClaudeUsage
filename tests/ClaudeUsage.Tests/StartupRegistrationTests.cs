@@ -65,4 +65,44 @@ public sealed class StartupRegistrationTests : IDisposable
 
         Assert.False(registration.IsEnabled);
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Sync_without_saved_choice_adopts_the_current_registration(bool registered)
+    {
+        var registration = new RunKeyStartupRegistration(Exe, _keyPath, "ClaudeUsage");
+        registration.SetEnabled(registered);
+
+        var settings = StartupSync.Apply(registration, new AppSettings(Topmost: true));
+
+        Assert.Equal(new AppSettings(Topmost: true, StartWithWindows: registered), settings);
+        Assert.Equal(registered, registration.IsEnabled);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Sync_applies_the_saved_choice_to_the_registry(bool wanted)
+    {
+        var registration = new RunKeyStartupRegistration(Exe, _keyPath, "ClaudeUsage");
+        registration.SetEnabled(!wanted);
+        var saved = new AppSettings(StartWithWindows: wanted);
+
+        var settings = StartupSync.Apply(registration, saved);
+
+        Assert.Equal(saved, settings);
+        Assert.Equal(wanted, registration.IsEnabled);
+    }
+
+    [Fact]
+    public void Sync_rewrites_a_stale_entry_when_the_saved_choice_is_enabled()
+    {
+        Store(@"""C:\Old\ClaudeUsage.exe"" --hidden");
+        var registration = new RunKeyStartupRegistration(Exe, _keyPath, "ClaudeUsage");
+
+        StartupSync.Apply(registration, new AppSettings(StartWithWindows: true));
+
+        Assert.Equal(registration.Command, StoredValue());
+    }
 }

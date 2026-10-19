@@ -63,6 +63,9 @@ public sealed partial class TrayIcon : IDisposable
 
     public event EventHandler? QuitRequested;
 
+    /// <summary>Raised after the user toggles "Start with Windows", with the registration state it ended in.</summary>
+    public event EventHandler<bool>? StartWithWindowsChanged;
+
     public event EventHandler? RefreshRequested;
 
     /// <summary>Disables "Refresh now" while a refresh is running.</summary>
@@ -173,6 +176,7 @@ public sealed partial class TrayIcon : IDisposable
         }
 
         _startupItem.Checked = _startup.IsEnabled;
+        StartWithWindowsChanged?.Invoke(this, _startupItem.Checked);
     }
 
     [LibraryImport("user32.dll", SetLastError = true)]
