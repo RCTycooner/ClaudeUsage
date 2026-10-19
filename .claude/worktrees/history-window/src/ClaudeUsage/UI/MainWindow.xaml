@@ -1,0 +1,155 @@
+<Window x:Class="ClaudeUsage.UI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="clr-namespace:ClaudeUsage.UI"
+        Title="Claude usage"
+        Width="320"
+        SizeToContent="Height"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        WindowStartupLocation="Manual"
+        MouseLeftButtonDown="OnBodyMouseLeftButtonDown"
+        Closing="OnClosing"
+        LocationChanged="OnLocationChanged">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Theme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Flat bar: track plus indicator, no Windows theme chrome or animation. -->
+            <Style x:Key="UsageBar" TargetType="ProgressBar">
+                <Setter Property="Height" Value="6" />
+                <Setter Property="Minimum" Value="0" />
+                <Setter Property="Maximum" Value="100" />
+                <Setter Property="Focusable" Value="False" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ProgressBar">
+                            <Grid>
+                                <Border x:Name="PART_Track" CornerRadius="3" Background="{StaticResource Track}" />
+                                <Border x:Name="PART_Indicator" CornerRadius="3" HorizontalAlignment="Left"
+                                        Background="{TemplateBinding Foreground}" />
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Footer: plain text; clickable (copies raw output) only while enabled. -->
+            <Style x:Key="FooterButton" TargetType="Button">
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="Focusable" Value="False" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="Transparent">
+                                <ContentPresenter />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <Trigger Property="IsEnabled" Value="True">
+                        <Setter Property="Cursor" Value="Hand" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Border Background="{StaticResource Panel}"
+            BorderBrush="{StaticResource PanelBorder}"
+            BorderThickness="1"
+            CornerRadius="12"
+            Margin="8">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.5" />
+        </Border.Effect>
+        <StackPanel Margin="14,10,10,14">
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Style="{StaticResource HeaderButton}"
+                            Content="&#xE740;"
+                            ToolTip="Open history (zoom and scroll further back)"
+                            Click="OnHistoryClick" />
+                    <ToggleButton x:Name="PinButton"
+                                  Style="{StaticResource PinToggle}"
+                                  Content="&#xE718;"
+                                  ToolTip="Stay on top"
+                                  IsChecked="{Binding Topmost, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
+                                  Checked="OnPinChanged"
+                                  Unchecked="OnPinChanged" />
+                    <Button Style="{StaticResource HeaderButton}"
+                            Content="&#xE711;"
+                            ToolTip="Hide to tray"
+                            Click="OnCloseClick" />
+                </StackPanel>
+                <TextBlock Text="Claude usage"
+                           Foreground="{StaticResource TextPrimary}"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center" />
+            </DockPanel>
+
+            <ItemsControl ItemsSource="{Binding Rows}" Margin="0,8,4,0" Focusable="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="44" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Rectangle Width="8" Height="8" RadiusX="2" RadiusY="2" Margin="0,0,7,0"
+                                       Fill="{Binding Swatch}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding Label}" FontSize="12"
+                                       Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="{Binding Countdown}" FontSize="11"
+                                       Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="3" Text="{Binding PercentText}" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimary}" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" />
+                            <ProgressBar Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,4,0,0"
+                                         Style="{StaticResource UsageBar}" Value="{Binding BarValue, Mode=OneWay}"
+                                         Foreground="{Binding BarBrush}" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <ui:UsageChart Margin="0,14,4,0" Height="110"
+                           Samples="{Binding Samples}" Now="{Binding Now}" />
+
+            <Button Margin="0,8,4,0" Style="{StaticResource FooterButton}"
+                    IsEnabled="{Binding CanCopy}" Click="OnFooterClick"
+                    ToolTip="{Binding FooterToolTip}" ToolTipService.ShowOnDisabled="True">
+                <DockPanel LastChildFill="True">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding FooterHint}" Margin="8,0,0,0"
+                               Foreground="{StaticResource Accent}" />
+                    <TextBlock Text="{Binding FooterText}" TextTrimming="CharacterEllipsis">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource TextMuted}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsError}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource ErrorText}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </DockPanel>
+            </Button>
+        </StackPanel>
+    </Border>
+</Window>

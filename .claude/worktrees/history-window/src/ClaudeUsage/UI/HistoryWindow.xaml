@@ -1,0 +1,129 @@
+<Window x:Class="ClaudeUsage.UI.HistoryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="clr-namespace:ClaudeUsage.UI"
+        Title="Claude usage history"
+        Width="920"
+        Height="440"
+        MinWidth="520"
+        MinHeight="280"
+        ResizeMode="CanResize"
+        Background="#FF1F1F23"
+        BorderBrush="#FF3A3A42"
+        BorderThickness="1"
+        WindowStartupLocation="CenterScreen"
+        PreviewKeyDown="OnPreviewKeyDown"
+        Closed="OnClosed">
+    <!-- No title bar: the header row is the caption (drag, double-click to maximise); the edges still resize. -->
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="40" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"
+                      UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Theme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <Style x:Key="LiveButton" TargetType="Button" BasedOn="{StaticResource ChipButton}">
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsLive}" Value="True">
+                        <Setter Property="Foreground" Value="{StaticResource Accent}" />
+                        <Setter Property="Background" Value="{StaticResource AccentWash}" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+
+            <Style x:Key="ToolbarSeparator" TargetType="Rectangle">
+                <Setter Property="Width" Value="1" />
+                <Setter Property="Height" Value="16" />
+                <Setter Property="Margin" Value="6,0,10,0" />
+                <Setter Property="Fill" Value="{StaticResource PanelBorder}" />
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid x:Name="Root" Margin="16,6,12,12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="34" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <DockPanel LastChildFill="True">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="MaximizeButton" Style="{StaticResource HeaderButton}" Content="&#xE922;"
+                        ToolTip="Maximise" Click="OnMaximizeClick" />
+                <Button Style="{StaticResource HeaderButton}" Content="&#xE711;" ToolTip="Close" Click="OnCloseClick" />
+            </StackPanel>
+            <TextBlock Text="Usage history" Foreground="{StaticResource TextPrimary}" FontSize="14"
+                       FontWeight="SemiBold" VerticalAlignment="Center" />
+            <!-- Legend: the widget's rows, so the model name follows the latest reading. -->
+            <ItemsControl ItemsSource="{Binding Legend}" Margin="20,0,0,0" VerticalAlignment="Center" Focusable="False">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,14,0">
+                            <Rectangle Width="8" Height="8" RadiusX="2" RadiusY="2" Margin="0,0,6,0"
+                                       Fill="{Binding Swatch}" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Label}" FontSize="11.5" Foreground="{StaticResource TextMuted}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </DockPanel>
+
+        <DockPanel Grid.Row="1" Margin="0,6,0,8" LastChildFill="True">
+            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                <Button Style="{StaticResource ChipButton}" Content="1D" Tag="1" ToolTip="Last 24 hours" Click="OnPresetClick" />
+                <Button Style="{StaticResource ChipButton}" Content="7D" Tag="7" ToolTip="Last 7 days" Click="OnPresetClick" />
+                <Button Style="{StaticResource ChipButton}" Content="30D" Tag="30" ToolTip="Last 30 days" Click="OnPresetClick" />
+                <Button Style="{StaticResource ChipButton}" Content="All" ToolTip="All stored history (double-click the chart)"
+                        Click="OnAllClick" />
+                <Rectangle Style="{StaticResource ToolbarSeparator}" />
+                <Button Style="{StaticResource ChipButton}" FontFamily="Segoe MDL2 Assets" Content="&#xE71F;"
+                        ToolTip="Zoom out (−, or mouse wheel)" IsEnabled="{Binding CanZoomOut}" Click="OnZoomOutClick" />
+                <Button Style="{StaticResource ChipButton}" FontFamily="Segoe MDL2 Assets" Content="&#xE8A3;"
+                        ToolTip="Zoom in (+, or mouse wheel)" IsEnabled="{Binding CanZoomIn}" Click="OnZoomInClick" />
+                <Rectangle Style="{StaticResource ToolbarSeparator}" />
+                <Button Style="{StaticResource ChipButton}" FontFamily="Segoe MDL2 Assets" Content="&#xE76B;"
+                        ToolTip="Scroll back (←)" Click="OnBackClick" />
+                <Button Style="{StaticResource ChipButton}" FontFamily="Segoe MDL2 Assets" Content="&#xE76C;"
+                        ToolTip="Scroll forward (→)" Click="OnForwardClick" />
+                <Button Style="{StaticResource LiveButton}" Content="Now"
+                        ToolTip="Jump to the latest reading and follow new ones (End)" Click="OnLiveClick" />
+            </StackPanel>
+            <TextBlock Text="{Binding RangeText}" Foreground="{StaticResource TextMuted}" FontSize="11.5"
+                       HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,2,0"
+                       TextTrimming="CharacterEllipsis" />
+        </DockPanel>
+
+        <ui:UsageChart x:Name="Chart" Grid.Row="2" ShowCrosshair="True"
+                       Samples="{Binding Samples}" Now="{Binding ViewEnd}" Span="{Binding ViewSpan}"
+                       MouseWheel="OnChartMouseWheel"
+                       MouseLeftButtonDown="OnChartMouseLeftButtonDown"
+                       MouseMove="OnChartMouseMove"
+                       MouseLeftButtonUp="OnChartMouseLeftButtonUp"
+                       LostMouseCapture="OnChartLostMouseCapture" />
+
+        <ScrollBar Grid.Row="3" Margin="22,8,2,0" Style="{StaticResource FlatHorizontalScrollBar}"
+                   Minimum="0"
+                   Maximum="{Binding ScrollMaximum, Mode=OneWay}"
+                   ViewportSize="{Binding ScrollViewport, Mode=OneWay}"
+                   LargeChange="{Binding ScrollLargeChange, Mode=OneWay}"
+                   SmallChange="{Binding ScrollSmallChange, Mode=OneWay}"
+                   Value="{Binding ScrollValue, Mode=OneWay}"
+                   Scroll="OnScroll" />
+
+        <TextBlock Grid.Row="4" Margin="22,8,2,0" FontSize="11" Foreground="{StaticResource TextMuted}"
+                   TextTrimming="CharacterEllipsis"
+                   Text="Wheel: zoom at cursor · Drag or Shift+wheel: scroll · Double-click: show all · ← → + − Home End" />
+    </Grid>
+</Window>
