@@ -6,13 +6,13 @@ namespace ClaudeUsage.Usage;
 public sealed record UsagePollFailure(DateTimeOffset At, string Message, string? RawText, Exception Error);
 
 /// <summary>
-/// Polls an <see cref="IUsageSource"/> every minute (first poll immediately) on a background task.
+/// Polls an <see cref="IUsageSource"/> every 5 minutes (first poll immediately) on a background task.
 /// Polls never overlap. <see cref="Updated"/> and <see cref="Failed"/> are raised through the injected invoker
 /// (the WPF dispatcher in the app), and never after <see cref="Dispose"/>.
 /// </summary>
 public sealed class UsagePoller : IDisposable
 {
-    public static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(60);
+    public static readonly TimeSpan DefaultInterval = TimeSpan.FromMinutes(5);
 
     /// <summary>How long <see cref="Dispose"/> waits for an in-flight poll (and its child process) to wind down.</summary>
     public static readonly TimeSpan DisposeWait = TimeSpan.FromSeconds(2);

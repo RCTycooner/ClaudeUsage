@@ -129,7 +129,7 @@ public sealed class ChartViewportTests
     }
 
     [Fact]
-    public void History_view_model_covers_all_samples_and_follows_the_clock()
+    public void History_view_model_covers_all_samples_and_follows_new_polls()
     {
         var now = s_end;
         var samples = new List<UsageSample> { Sample(now.AddDays(-20)), Sample(now.AddMinutes(-1)) };
@@ -148,13 +148,13 @@ public sealed class ChartViewportTests
 
         history.ShowLast(TimeSpan.FromDays(1));
         now = now.AddMinutes(15);
-        main.Refresh();
+        state.SetSnapshot(samples[^1].ToSnapshot(), samples);
         Assert.Equal(now, history.ViewEnd);
         Assert.True(history.IsLive);
 
         history.Pan(-1);
         now = now.AddMinutes(15);
-        main.Refresh();
+        state.SetSnapshot(samples[^1].ToSnapshot(), samples);
         Assert.Equal(now.AddMinutes(-15).AddDays(-1), history.ViewEnd);
         Assert.False(history.IsLive);
 

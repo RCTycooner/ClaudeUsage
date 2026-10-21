@@ -23,9 +23,9 @@ public sealed class ChartMathTests
     }
 
     [Fact]
-    public void Gap_longer_than_five_minutes_breaks_the_line()
+    public void Gap_longer_than_fifteen_minutes_breaks_the_line()
     {
-        var segments = SessionSegments(At(0, 1), At(1, 2), At(6.5, 3), At(7.5, 4));
+        var segments = SessionSegments(At(0, 1), At(5, 2), At(20.5, 3), At(25.5, 4));
 
         Assert.Equal(2, segments.Count);
         Assert.Equal(2, segments[0].Count);
@@ -33,9 +33,9 @@ public sealed class ChartMathTests
     }
 
     [Fact]
-    public void Gap_of_exactly_five_minutes_is_joined()
+    public void Gap_of_exactly_fifteen_minutes_is_joined()
     {
-        Assert.Single(SessionSegments(At(0, 1), At(5, 2)));
+        Assert.Single(SessionSegments(At(0, 1), At(15, 2)));
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public sealed class ChartMathTests
     [Fact]
     public void Nulls_spanning_more_than_the_gap_break_the_line()
     {
-        var segments = SessionSegments(At(0, 1), At(3, null), At(6, null), At(9, 4));
+        var segments = SessionSegments(At(0, 1), At(5, null), At(10, null), At(15, null), At(20, 4));
 
         Assert.Equal(2, segments.Count);
     }
