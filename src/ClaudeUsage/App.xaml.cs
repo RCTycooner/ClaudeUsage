@@ -24,6 +24,10 @@ public partial class App : Application, IDisposable
     private FileLogger? _logger;
     private UsageHistoryStore? _history;
     private UsagePoller? _poller;
+    private ClaudeCliUsageSource? _usageSource;
+    private RunKeyStartupRegistration? _startup;
+    private ProjectCatalog? _projects;
+    private SettingsWindow? _settingsWindow;
 
     /// <summary>True once the app is really exiting, so the window's Closing handler lets it close.</summary>
     public bool IsQuitting { get; private set; }
@@ -67,14 +71,15 @@ public partial class App : Application, IDisposable
         bool startHidden = e.Args.Contains(RunKeyStartupRegistration.HiddenArgument, StringComparer.OrdinalIgnoreCase);
 
         _settingsStore = new SettingsStore(folder);
-        var startup = new RunKeyStartupRegistration();
+        var startup = _startup = new RunKeyStartupRegistration();
         var settings = ApplyStartWithWindows(startup, _settingsStore.Load());
         var viewModel = new MainViewModel(UsageState);
         viewModel.Start();
-        var projects = new ProjectCatalog(settings.EffectiveProjectsRoot);
+        var projects = _projects = new ProjectCatalog(settings.EffectiveProjectsRoot);
         _window = new MainWindow(_settingsStore, settings, viewModel, projects);
         _window.OpenProjectRequested += (_, project) => OpenProject(project);
         _window.RescanProjectsRequested += (_, _) => RescanProjects(projects);
+        _window.SettingsRequested += (_, _) => ShowSettings();
         _tray = new TrayIcon(startup, projects);
         _tray.OpenProjectRequested += (_, project) => OpenProject(project);
         _tray.RescanProjectsRequested += (_, _) => RescanProjects(projects);
@@ -83,6 +88,7 @@ public partial class App : Application, IDisposable
         _tray.ShowUiRequested += (_, _) => ShowWindow();
         _tray.QuitRequested += (_, _) => Quit();
         _tray.RefreshRequested += (_, _) => _ = RefreshNowAsync();
+        _tray.SettingsRequested += (_, _) => ShowSettings();
 
         // Show the last known values straight away, then start polling (first poll runs immediately).
         _history = new UsageHistoryStore(folder);
@@ -94,7 +100,8 @@ public partial class App : Application, IDisposable
             _tray.Update(last);
         }
 
-        _poller = new UsagePoller(new ClaudeCliUsageSource(folder, settings.ClaudePath), Dispatcher);
+        _usageSource = new ClaudeCliUsageSource(folder, settings.ClaudePath);
+        _poller = new UsagePoller(_usageSource, Dispatcher);
         _poller.Updated += OnUsageUpdated;
         _poller.Failed += OnUsageFailed;
         _poller.Start();
@@ -276,21 +283,28 @@ public partial class App : Application, IDisposable
         }
     }
 
-    /// <summary>Scans the projects root off the UI thread; the menus show "Scanning…" until it finishes.</summary>
+    /// <summary>
+    /// Scans the projects root off the UI thread; the menus show "Scanning…" until it finishes. The result is dropped
+    /// if the root changed meanwhile (a scan of the new root is already running then).
+    /// </summary>
     private async Task ScanProjectsAsync(ProjectCatalog catalog)
     {
+        string root = catalog.Root;
         IReadOnlyList<ClaudeProject> found;
         try
         {
-            found = await Task.Run(() => ProjectScanner.Scan(catalog.Root));
+            found = await Task.Run(() => ProjectScanner.Scan(root));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            _logger?.Log($"Could not scan {catalog.Root} for projects.", ex);
+            _logger?.Log($"Could not scan {root} for projects.", ex);
             found = [];
         }
 
-        catalog.SetProjects(found);
+        if (string.Equals(catalog.Root, root, StringComparison.Ordinal))
+        {
+            catalog.SetProjects(found);
+        }
     }
 
     /// <summary>Starts a fresh scan unless one is already running (the menus disable "Rescan" meanwhile).</summary>
@@ -316,6 +330,66 @@ public partial class App : Application, IDisposable
             _logger?.Log($"Could not open PowerShell in {project.Directory}.", ex);
             MessageBox.Show($"Could not open PowerShell in {project.Directory}:\n{ex.Message}", "Claude usage",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    /// <summary>Opens the settings window, or brings the open one forward.</summary>
+    private void ShowSettings()
+    {
+        if (_window is null)
+        {
+            return;
+        }
+
+        if (_settingsWindow is null)
+        {
+            // On top of the widget when the widget stays on top.
+            _settingsWindow = new SettingsWindow(_window.Settings) { Topmost = _window.Topmost };
+            _settingsWindow.Saved += (_, settings) => ApplySettings(settings);
+            _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+            _settingsWindow.Show();
+        }
+
+        _settingsWindow.Activate();
+    }
+
+    /// <summary>Applies settings from the settings window straight away (no restart needed) and saves them.</summary>
+    private void ApplySettings(AppSettings settings)
+    {
+        if (_window is null)
+        {
+            return;
+        }
+
+        var previous = _window.Settings;
+        if (_startup is not null && settings.StartWithWindows is bool wanted && wanted != _startup.IsEnabled)
+        {
+            try
+            {
+                _startup.SetEnabled(wanted);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+            {
+                _logger?.Log("Could not change the Start-with-Windows registration.", ex);
+            }
+
+            // Keep what the registry ended up with, as the tray toggle does.
+            settings = settings with { StartWithWindows = _startup.IsEnabled };
+        }
+
+        _window.ApplySettings(settings);
+
+        if (_usageSource is not null && !string.Equals(previous.ClaudePath, settings.ClaudePath, StringComparison.Ordinal))
+        {
+            _usageSource.ClaudePathOverride = settings.ClaudePath;
+            _ = RefreshNowAsync();
+        }
+
+        if (_projects is not null
+            && !string.Equals(_projects.Root, settings.EffectiveProjectsRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            _projects.BeginScan(settings.EffectiveProjectsRoot);
+            _ = ScanProjectsAsync(_projects);
         }
     }
 

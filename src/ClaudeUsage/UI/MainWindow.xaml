@@ -81,6 +81,10 @@
                             Content="&#xE740;"
                             ToolTip="Open history (zoom and scroll further back)"
                             Click="OnHistoryClick" />
+                    <Button Style="{StaticResource HeaderButton}"
+                            Content="&#xE713;"
+                            ToolTip="Settings"
+                            Click="OnSettingsClick" />
                     <ToggleButton x:Name="PinButton"
                                   Style="{StaticResource PinToggle}"
                                   Content="&#xE718;"

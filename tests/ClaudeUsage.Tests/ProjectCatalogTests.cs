@@ -24,6 +24,21 @@ public sealed class ProjectCatalogTests
     }
 
     [Fact]
+    public void BeginScan_with_a_root_switches_root_and_drops_the_list()
+    {
+        var catalog = new ProjectCatalog(@"D:\");
+        catalog.SetProjects([new ClaudeProject("Othello", @"D:\Git\Othello")]);
+        int changes = 0;
+        catalog.Changed += (_, _) => changes++;
+
+        catalog.BeginScan(@"E:\Code");
+
+        Assert.Equal(@"E:\Code", catalog.Root);
+        Assert.True(catalog.IsScanning);
+        Assert.Equal(1, changes);
+    }
+
+    [Fact]
     public void EmptyText_says_nothing_was_found_after_an_empty_scan()
     {
         var catalog = new ProjectCatalog(@"E:\Code");

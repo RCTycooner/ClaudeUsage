@@ -32,7 +32,7 @@ public sealed class ClaudeCliUsageSource : IUsageSource
     private static readonly string[] s_sessionFragments = ["SESSION", "MESSAGING", "SSE_PORT", "AGENT", "CHILD", "ENTRYPOINT"];
 
     private readonly string _workingDirectory;
-    private readonly string? _claudePathOverride;
+    private volatile string? _claudePathOverride;
 
     /// <param name="workingDirectory">Folder to run in (the app's data folder, so no project config is picked up).</param>
     /// <param name="claudePathOverride">Explicit path to claude.exe (or claude.cmd) from settings, or null.</param>
@@ -40,6 +40,13 @@ public sealed class ClaudeCliUsageSource : IUsageSource
     {
         _workingDirectory = workingDirectory;
         _claudePathOverride = claudePathOverride;
+    }
+
+    /// <summary>The settings override; a change applies from the next poll.</summary>
+    public string? ClaudePathOverride
+    {
+        get => _claudePathOverride;
+        set => _claudePathOverride = value;
     }
 
     public async Task<string> FetchRawAsync(CancellationToken cancellationToken)
