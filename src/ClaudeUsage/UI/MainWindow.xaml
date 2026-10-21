@@ -78,7 +78,7 @@
                             ToolTip="Open Claude Code in a project"
                             Click="OnProjectsClick" />
                     <Button Style="{StaticResource HeaderButton}"
-                            Content="&#xE740;"
+                            Content="&#xE9D2;"
                             ToolTip="Open history (zoom and scroll further back)"
                             Click="OnHistoryClick" />
                     <Button Style="{StaticResource HeaderButton}"
