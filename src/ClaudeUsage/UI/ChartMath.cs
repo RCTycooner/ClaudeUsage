@@ -8,8 +8,11 @@ public readonly record struct ChartPoint(DateTimeOffset Taken, double Percent);
 /// <summary>Pure helpers behind <see cref="UsageChart"/>: windowing, gap segmentation, thinning, axis mapping, ticks.</summary>
 public static class ChartMath
 {
-    /// <summary>Consecutive samples further apart than this are not joined (machine asleep, app closed).</summary>
-    public static readonly TimeSpan MaxGap = TimeSpan.FromMinutes(5);
+    /// <summary>
+    /// Consecutive samples further apart than this are not joined (machine asleep, app closed). Three poll intervals,
+    /// so a slow or failed poll does not break the line.
+    /// </summary>
+    public static readonly TimeSpan MaxGap = TimeSpan.FromMinutes(15);
 
     /// <summary>The widget's chart shows this much history, ending now.</summary>
     public static readonly TimeSpan Range = TimeSpan.FromDays(7);
@@ -109,7 +112,7 @@ public static class ChartMath
     /// <summary>
     /// Thins a run for drawing: points are grouped into <paramref name="bucket"/>-wide time slots counted from
     /// <paramref name="origin"/>, and each slot keeps only its first, lowest, highest and last point, in time order.
-    /// With one slot per pixel the line looks the same, but months of one-a-minute samples stay cheap to draw.
+    /// With one slot per pixel the line looks the same, but months of one-per-poll samples stay cheap to draw.
     /// </summary>
     public static IReadOnlyList<ChartPoint> Decimate(IReadOnlyList<ChartPoint> points, DateTimeOffset origin, TimeSpan bucket)
     {
