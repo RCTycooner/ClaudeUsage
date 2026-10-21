@@ -6,8 +6,9 @@ A small Windows tray widget that shows your Claude plan usage (session, week, an
 
 - Borderless, draggable window; closing it hides it to the tray.
 - Optional "stay on top"; window position and that setting are remembered.
-- A 7-day chart in the widget. The expand button opens a resizable history window over everything stored (up to 90 days): 1D / 7D / 30D / All presets, zoom (buttons, mouse wheel at the cursor, + / −), scrolling (scroll bar, drag, Shift+wheel, arrow keys), a "Now" button that follows new readings, and a hover read-out of the values at any point.
-- Tray menu: current stats, Show UI, Claude projects, Refresh now, Open data folder, Start with Windows, Quit.
+- A 7-day chart in the widget. The chart button opens a resizable history window over everything stored (up to 90 days): 1D / 7D / 30D / All presets, zoom (buttons, mouse wheel at the cursor, + / −), scrolling (scroll bar, drag, Shift+wheel, arrow keys), a "Now" button that follows new readings, and a hover read-out of the values at any point.
+- Tray menu: current stats, Show UI, Claude projects, Refresh now, Open data folder, Start with Windows, Settings…, Quit.
+- Settings (gear button or tray menu): Claude CLI path, projects folder, stay on top, and Start with Windows. Blank paths use the defaults; a path that doesn't exist is refused.
 - Claude projects: at startup the app scans `projectsRoot` in `settings.json` (default `D:\`) in the background for folders with a `CLAUDE.md`, skipping hidden/system folders, junctions, `.git`, `.claude` (worktrees), `node_modules`, `bin`, `obj` and `packages`. The list is in the tray menu and behind the prompt button in the widget's header; each entry shows the folder name (full path as tooltip) and opens a PowerShell window there running `claude` (`powershell.exe -NoExit -Command claude`). "Rescan" at the bottom of either menu scans again (e.g. after `/init` in a new folder).
 - Start with Windows adds `"<path>\ClaudeUsage.exe" --hidden` to `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, so it starts in the tray without opening the window. If the exe moves, the menu item shows unchecked; tick it again to update the entry.
 
