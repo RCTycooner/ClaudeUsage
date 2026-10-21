@@ -55,6 +55,8 @@ public sealed class ClaudeCliUsageSource : IUsageSource
             throw new UsageSourceException($"Could not start {exe}: {ex.Message}", ex);
         }
 
+        LowerPriority(process);
+
         // Process.Dispose does not close redirected streams the caller has touched; dispose them explicitly.
         using var stdoutReader = process.StandardOutput;
         using var stderrReader = process.StandardError;
@@ -291,6 +293,23 @@ public sealed class ClaudeCliUsageSource : IUsageSource
     }
 
     private static string Truncate(string text) => text.Length > MaxDetailChars ? text[..MaxDetailChars] + "..." : text;
+
+    /// <summary>
+    /// Runs the poll at BelowNormal so it does not compete with the foreground (it spawns git, rg and MCP servers,
+    /// which inherit the class). Only this child is lowered: the widget itself, and anything it launches directly
+    /// (such as <see cref="Projects.ProjectLauncher"/>), stays at Normal.
+    /// </summary>
+    private static void LowerPriority(Process process)
+    {
+        try
+        {
+            process.PriorityClass = ProcessPriorityClass.BelowNormal;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            // Already exited (or not accessible); the poll still works at its default priority.
+        }
+    }
 
     private static void KillQuietly(Process process)
     {
