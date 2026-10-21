@@ -16,7 +16,16 @@ public sealed class ProjectCatalog(string root)
         ? $"Scanning {Root} for {ProjectScanner.MarkerFileName}…"
         : $"No {ProjectScanner.MarkerFileName} found under {Root}";
 
+    public bool IsScanning => Projects is null;
+
     public event EventHandler? Changed;
+
+    /// <summary>Drops the current list so the menus show "Scanning…" until <see cref="SetProjects"/>.</summary>
+    public void BeginScan()
+    {
+        Projects = null;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
 
     public void SetProjects(IReadOnlyList<ClaudeProject> projects)
     {

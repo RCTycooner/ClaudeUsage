@@ -74,8 +74,10 @@ public partial class App : Application, IDisposable
         var projects = new ProjectCatalog(settings.EffectiveProjectsRoot);
         _window = new MainWindow(_settingsStore, settings, viewModel, projects);
         _window.OpenProjectRequested += (_, project) => OpenProject(project);
+        _window.RescanProjectsRequested += (_, _) => RescanProjects(projects);
         _tray = new TrayIcon(startup, projects);
         _tray.OpenProjectRequested += (_, project) => OpenProject(project);
+        _tray.RescanProjectsRequested += (_, _) => RescanProjects(projects);
         _ = ScanProjectsAsync(projects);
         _tray.StartWithWindowsChanged += (_, enabled) => _window.SetStartWithWindows(enabled);
         _tray.ShowUiRequested += (_, _) => ShowWindow();
@@ -284,6 +286,18 @@ public partial class App : Application, IDisposable
         }
 
         catalog.SetProjects(found);
+    }
+
+    /// <summary>Starts a fresh scan unless one is already running (the menus disable "Rescan" meanwhile).</summary>
+    private void RescanProjects(ProjectCatalog catalog)
+    {
+        if (catalog.IsScanning)
+        {
+            return;
+        }
+
+        catalog.BeginScan();
+        _ = ScanProjectsAsync(catalog);
     }
 
     private void OpenProject(ClaudeProject project)

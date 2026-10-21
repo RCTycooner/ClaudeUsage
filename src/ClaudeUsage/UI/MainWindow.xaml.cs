@@ -43,6 +43,9 @@ public partial class MainWindow : Window
     /// <summary>Raised when the user picks a project from the projects button's menu.</summary>
     public event EventHandler<ClaudeProject>? OpenProjectRequested;
 
+    /// <summary>Raised when the user picks "Rescan" in the projects button's menu.</summary>
+    public event EventHandler? RescanProjectsRequested;
+
     public void ShowAndActivate()
     {
         if (!IsVisible)
@@ -134,6 +137,11 @@ public partial class MainWindow : Window
                 menu.Items.Add(item);
             }
         }
+
+        menu.Items.Add(new Separator());
+        var rescan = new MenuItem { Header = "Rescan", IsEnabled = !_projects.IsScanning };
+        rescan.Click += (_, _) => RescanProjectsRequested?.Invoke(this, EventArgs.Empty);
+        menu.Items.Add(rescan);
 
         menu.IsOpen = true;
     }

@@ -79,6 +79,9 @@ public sealed partial class TrayIcon : IDisposable
     /// <summary>Raised when the user picks a project from the "Claude projects" submenu.</summary>
     public event EventHandler<ClaudeProject>? OpenProjectRequested;
 
+    /// <summary>Raised when the user picks "Rescan" in the "Claude projects" submenu.</summary>
+    public event EventHandler? RescanProjectsRequested;
+
     /// <summary>Disables "Refresh now" while a refresh is running.</summary>
     public void SetRefreshing(bool refreshing) => _refreshItem.Enabled = !refreshing;
 
@@ -228,26 +231,35 @@ public sealed partial class TrayIcon : IDisposable
 
     private void OnProjectsChanged(object? sender, EventArgs e) => RefreshProjectItems();
 
-    /// <summary>One item per project (full path as tooltip), or a disabled line while scanning or when none were found.</summary>
+    /// <summary>
+    /// One item per project (full path as tooltip), or a disabled line while scanning or when none were found;
+    /// then "Rescan", disabled while a scan runs.
+    /// </summary>
     private void RefreshProjectItems()
     {
         _projectsItem.DropDownItems.Clear();
         if (_projects.Projects is not { Count: > 0 } projects)
         {
             _projectsItem.DropDownItems.Add(new WinForms.ToolStripMenuItem(_projects.EmptyText) { Enabled = false });
-            return;
+        }
+        else
+        {
+            foreach (var project in projects)
+            {
+                // "&" would otherwise mark the next letter as the access key.
+                var item = new WinForms.ToolStripMenuItem(project.Name.Replace("&", "&&", StringComparison.Ordinal))
+                {
+                    ToolTipText = project.Directory,
+                };
+                item.Click += (_, _) => OpenProjectRequested?.Invoke(this, project);
+                _projectsItem.DropDownItems.Add(item);
+            }
         }
 
-        foreach (var project in projects)
-        {
-            // "&" would otherwise mark the next letter as the access key.
-            var item = new WinForms.ToolStripMenuItem(project.Name.Replace("&", "&&", StringComparison.Ordinal))
-            {
-                ToolTipText = project.Directory,
-            };
-            item.Click += (_, _) => OpenProjectRequested?.Invoke(this, project);
-            _projectsItem.DropDownItems.Add(item);
-        }
+        _projectsItem.DropDownItems.Add(new WinForms.ToolStripSeparator());
+        var rescan = new WinForms.ToolStripMenuItem("Rescan") { Enabled = !_projects.IsScanning };
+        rescan.Click += (_, _) => RescanProjectsRequested?.Invoke(this, EventArgs.Empty);
+        _projectsItem.DropDownItems.Add(rescan);
     }
 
     private void OnMouseDoubleClick(object? sender, WinForms.MouseEventArgs e)
