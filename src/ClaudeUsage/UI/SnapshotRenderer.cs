@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using ClaudeUsage.Projects;
 using ClaudeUsage.Storage;
 using ClaudeUsage.Usage;
 
@@ -20,7 +21,7 @@ public static class SnapshotRenderer
         var now = DateTimeOffset.Now;
         var viewModel = SyntheticViewModel(now, ChartMath.Range);
         using var store = new SettingsStore(Path.Combine(Path.GetTempPath(), "ClaudeUsage-snapshot"));
-        var window = new MainWindow(store, new AppSettings(), viewModel);
+        var window = new MainWindow(store, new AppSettings(), viewModel, new ProjectCatalog(AppSettings.DefaultProjectsRoot));
 
         // Render the window's content tree on its own; the window itself is never shown.
         var root = (FrameworkElement)window.Content;

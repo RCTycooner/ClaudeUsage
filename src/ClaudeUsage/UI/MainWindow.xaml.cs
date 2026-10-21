@@ -1,7 +1,9 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using ClaudeUsage.Projects;
 using ClaudeUsage.Storage;
 using ClaudeUsage.Tray;
 
@@ -14,6 +16,7 @@ public partial class MainWindow : Window
 
     private readonly SettingsStore _store;
     private readonly MainViewModel _viewModel;
+    private readonly ProjectCatalog _projects;
     private readonly bool _loaded;
     private AppSettings _settings;
     private HistoryWindow? _history;
@@ -21,12 +24,14 @@ public partial class MainWindow : Window
     /// <param name="store">Where position and stay-on-top are saved.</param>
     /// <param name="settings">Settings as loaded once at startup; the window keeps its own copy from here on.</param>
     /// <param name="viewModel">The view model.</param>
-    public MainWindow(SettingsStore store, AppSettings settings, MainViewModel viewModel)
+    /// <param name="projects">The scanned projects, shown by the projects button.</param>
+    public MainWindow(SettingsStore store, AppSettings settings, MainViewModel viewModel, ProjectCatalog projects)
     {
         ArgumentNullException.ThrowIfNull(settings);
         _store = store;
         _settings = settings;
         _viewModel = viewModel;
+        _projects = projects;
         InitializeComponent();
         DataContext = viewModel;
 
@@ -34,6 +39,9 @@ public partial class MainWindow : Window
         PlaceWindow(settings);
         _loaded = true;
     }
+
+    /// <summary>Raised when the user picks a project from the projects button's menu.</summary>
+    public event EventHandler<ClaudeProject>? OpenProjectRequested;
 
     public void ShowAndActivate()
     {
@@ -107,6 +115,28 @@ public partial class MainWindow : Window
     private void OnFooterClick(object sender, RoutedEventArgs e) => _viewModel.CopyRawText();
 
     private void OnCloseClick(object sender, RoutedEventArgs e) => Hide();
+
+    /// <summary>Drops down the project list under the button; built on each click so it is never stale.</summary>
+    private void OnProjectsClick(object sender, RoutedEventArgs e)
+    {
+        var menu = new ContextMenu { PlacementTarget = (UIElement)sender, Placement = PlacementMode.Bottom };
+        if (_projects.Projects is not { Count: > 0 } projects)
+        {
+            menu.Items.Add(new MenuItem { Header = _projects.EmptyText, IsEnabled = false });
+        }
+        else
+        {
+            foreach (var project in projects)
+            {
+                // "_" would otherwise mark the next letter as the access key.
+                var item = new MenuItem { Header = project.Name.Replace("_", "__", StringComparison.Ordinal), ToolTip = project.Directory };
+                item.Click += (_, _) => OpenProjectRequested?.Invoke(this, project);
+                menu.Items.Add(item);
+            }
+        }
+
+        menu.IsOpen = true;
+    }
 
     /// <summary>Opens the history window, or brings the open one forward.</summary>
     private void OnHistoryClick(object sender, RoutedEventArgs e)

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using ClaudeUsage.Projects;
 using ClaudeUsage.Storage;
 using ClaudeUsage.Usage;
 using Drawing = System.Drawing;
@@ -22,14 +23,17 @@ public sealed partial class TrayIcon : IDisposable
     private readonly WinForms.ToolStripMenuItem _sessionItem;
     private readonly WinForms.ToolStripMenuItem _weekItem;
     private readonly WinForms.ToolStripMenuItem _modelItem;
+    private readonly WinForms.ToolStripMenuItem _projectsItem;
+    private readonly ProjectCatalog _projects;
     private Drawing.Icon _icon;
     private UsageSnapshot? _snapshot;
     private bool _ignoreNextMouseUp;
     private bool _disposed;
 
-    public TrayIcon(IStartupRegistration startup)
+    public TrayIcon(IStartupRegistration startup, ProjectCatalog projects)
     {
         _startup = startup;
+        _projects = projects;
         _icon = CreateFallbackIcon();
         _menu = new WinForms.ContextMenuStrip();
 
@@ -38,6 +42,8 @@ public sealed partial class TrayIcon : IDisposable
         _modelItem = AddStatItem();
         _menu.Items.Add(new WinForms.ToolStripSeparator());
         _menu.Items.Add("Show UI", null, (_, _) => ShowUiRequested?.Invoke(this, EventArgs.Empty));
+        _projectsItem = new WinForms.ToolStripMenuItem("Claude projects");
+        _menu.Items.Add(_projectsItem);
         _refreshItem = (WinForms.ToolStripMenuItem)_menu.Items.Add("Refresh now", null, (_, _) => RefreshRequested?.Invoke(this, EventArgs.Empty));
         _menu.Items.Add("Open data folder", null, (_, _) => OpenDataFolder());
         _startupItem = new WinForms.ToolStripMenuItem("Start with Windows") { CheckOnClick = false };
@@ -56,7 +62,9 @@ public sealed partial class TrayIcon : IDisposable
         _notifyIcon.MouseUp += OnMouseUp;
         _notifyIcon.MouseDoubleClick += OnMouseDoubleClick;
         _menu.Opening += OnMenuOpening;
+        _projects.Changed += OnProjectsChanged;
         RefreshStatItems();
+        RefreshProjectItems();
     }
 
     public event EventHandler? ShowUiRequested;
@@ -67,6 +75,9 @@ public sealed partial class TrayIcon : IDisposable
     public event EventHandler<bool>? StartWithWindowsChanged;
 
     public event EventHandler? RefreshRequested;
+
+    /// <summary>Raised when the user picks a project from the "Claude projects" submenu.</summary>
+    public event EventHandler<ClaudeProject>? OpenProjectRequested;
 
     /// <summary>Disables "Refresh now" while a refresh is running.</summary>
     public void SetRefreshing(bool refreshing) => _refreshItem.Enabled = !refreshing;
@@ -96,6 +107,7 @@ public sealed partial class TrayIcon : IDisposable
         _notifyIcon.MouseUp -= OnMouseUp;
         _notifyIcon.MouseDoubleClick -= OnMouseDoubleClick;
         _menu.Opening -= OnMenuOpening;
+        _projects.Changed -= OnProjectsChanged;
         _notifyIcon.Dispose();
         _menu.Dispose();
         _icon.Dispose();
@@ -212,6 +224,30 @@ public sealed partial class TrayIcon : IDisposable
         _weekItem.Text = UsageText.MenuLine("Week", _snapshot?.Week, now);
         _modelItem.Text = UsageText.MenuLine(
             _snapshot?.ModelWeekLabel ?? UsageSnapshot.DefaultModelWeekLabel, _snapshot?.ModelWeek, now);
+    }
+
+    private void OnProjectsChanged(object? sender, EventArgs e) => RefreshProjectItems();
+
+    /// <summary>One item per project (full path as tooltip), or a disabled line while scanning or when none were found.</summary>
+    private void RefreshProjectItems()
+    {
+        _projectsItem.DropDownItems.Clear();
+        if (_projects.Projects is not { Count: > 0 } projects)
+        {
+            _projectsItem.DropDownItems.Add(new WinForms.ToolStripMenuItem(_projects.EmptyText) { Enabled = false });
+            return;
+        }
+
+        foreach (var project in projects)
+        {
+            // "&" would otherwise mark the next letter as the access key.
+            var item = new WinForms.ToolStripMenuItem(project.Name.Replace("&", "&&", StringComparison.Ordinal))
+            {
+                ToolTipText = project.Directory,
+            };
+            item.Click += (_, _) => OpenProjectRequested?.Invoke(this, project);
+            _projectsItem.DropDownItems.Add(item);
+        }
     }
 
     private void OnMouseDoubleClick(object? sender, WinForms.MouseEventArgs e)

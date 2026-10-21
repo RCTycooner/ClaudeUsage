@@ -105,6 +105,31 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void ProjectsRoot_defaults_to_D_when_an_older_file_lacks_it()
+    {
+        Directory.CreateDirectory(_folder);
+        File.WriteAllText(Path.Combine(_folder, "settings.json"), """{ "topmost": true }""");
+
+        using var store = new SettingsStore(_folder);
+
+        Assert.Equal(@"D:\", store.Load().ProjectsRoot);
+    }
+
+    [Theory]
+    [InlineData("""{ "projectsRoot": "E:\\Code" }""", @"E:\Code")]
+    [InlineData("""{ "projectsRoot": null }""", @"D:\")]
+    [InlineData("""{ "projectsRoot": "  " }""", @"D:\")]
+    public void EffectiveProjectsRoot_reads_the_file_and_falls_back_on_blank(string json, string expected)
+    {
+        Directory.CreateDirectory(_folder);
+        File.WriteAllText(Path.Combine(_folder, "settings.json"), json);
+
+        using var store = new SettingsStore(_folder);
+
+        Assert.Equal(expected, store.Load().EffectiveProjectsRoot);
+    }
+
+    [Fact]
     public void Concurrent_saves_do_not_throw_or_corrupt_the_file()
     {
         using var store = new SettingsStore(_folder, TimeSpan.FromMilliseconds(1));
