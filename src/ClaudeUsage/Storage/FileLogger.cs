@@ -6,7 +6,8 @@ namespace ClaudeUsage.Storage;
 
 /// <summary>
 /// Appends timestamped lines to log.txt. When the file exceeds the cap it is moved to log.old.txt and a new one
-/// is started, so at most about twice the cap is kept. Thread-safe; never throws on I/O errors.
+/// is started, so at most about twice the cap is kept. Thread-safe; never throws on I/O errors. Lines are written
+/// in order on a background <see cref="SerialWriter"/>, so <see cref="Log"/> never blocks; <see cref="Flush"/> before exit.
 /// </summary>
 public sealed class FileLogger
 {
@@ -14,7 +15,7 @@ public sealed class FileLogger
 
     private readonly string _folder;
     private readonly long _maxBytes;
-    private readonly Lock _gate = new();
+    private readonly SerialWriter _writer = new();
 
     public FileLogger(string folder, long maxBytes = DefaultMaxBytes)
     {
@@ -42,8 +43,9 @@ public sealed class FileLogger
         }
 
         sb.Append('\n');
+        var text = sb.ToString();
 
-        lock (_gate)
+        _writer.Enqueue(() =>
         {
             try
             {
@@ -54,12 +56,15 @@ public sealed class FileLogger
                     File.Move(Path, System.IO.Path.Combine(_folder, "log.old.txt"), overwrite: true);
                 }
 
-                File.AppendAllText(Path, sb.ToString(), TextFiles.Utf8NoBom);
+                File.AppendAllText(Path, text, TextFiles.Utf8NoBom);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 // Logging must never break the app.
             }
-        }
+        });
     }
+
+    /// <summary>Waits for queued lines to be written; false if <paramref name="timeout"/> ran out first.</summary>
+    public bool Flush(TimeSpan? timeout = null) => _writer.Flush(timeout);
 }
