@@ -3,9 +3,15 @@ using ClaudeUsage.Storage;
 namespace ClaudeUsage.Usage;
 
 /// <summary>
-/// Linear estimates of when a bucket reaches 100 %: the session from its average rate since it started, the week
-/// buckets from their average rate over the last 7 days of history. Null when there is too little to go on, nothing
-/// is being used, or the bucket is already full.
+/// Where a bucket is heading at its current rate: <see cref="FullAt"/> when it reaches 100 % before the reset (or the
+/// reset is unknown), otherwise <see cref="AtReset"/>, the percentage it would reach by the reset.
+/// </summary>
+public sealed record LimitEstimate(DateTimeOffset? FullAt, int? AtReset);
+
+/// <summary>
+/// Linear estimates from a usage rate: the session's from its average rate since it started, the week buckets' from
+/// their average rate over the last 7 days of history. Null when there is too little to go on, nothing is being
+/// used, or the bucket is already full.
 /// </summary>
 public static class LimitForecast
 {
@@ -17,27 +23,27 @@ public static class LimitForecast
     public static readonly TimeSpan MinSpan = TimeSpan.FromMinutes(15);
 
     /// <summary>The session started <see cref="SessionLength"/> before its reset; usage since then sets the rate.</summary>
-    public static DateTimeOffset? Session(UsageBucket? bucket, DateTimeOffset now)
+    public static LimitEstimate? Session(UsageBucket? bucket, DateTimeOffset now)
     {
-        if (bucket is not { ResetsAt: { } reset } || bucket.Percent is <= 0 or >= 100)
+        if (bucket is not { ResetsAt: { } reset } || bucket.Percent <= 0)
         {
             return null;
         }
 
         var elapsed = now - (reset - SessionLength);
-        return elapsed < MinSpan ? null : Eta(bucket.Percent, bucket.Percent / elapsed.TotalHours, now);
+        return elapsed < MinSpan ? null : Estimate(bucket, bucket.Percent / elapsed.TotalHours, now);
     }
 
     /// <summary>
     /// Rate = usage added over the samples of the last 7 days / the time they span. Increases between consecutive
     /// samples are summed; across a reset (a drop) the new value counts as used since the reset.
     /// </summary>
-    public static DateTimeOffset? Weekly(
+    public static LimitEstimate? Weekly(
         UsageBucket? bucket, IReadOnlyList<UsageSample> history, Func<UsageSample, int?> percentOf, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(history);
         ArgumentNullException.ThrowIfNull(percentOf);
-        if (bucket is null || bucket.Percent >= 100)
+        if (bucket is null)
         {
             return null;
         }
@@ -68,13 +74,25 @@ public static class LimitForecast
             return null;
         }
 
-        return Eta(bucket.Percent, used / (l - f).TotalHours, now);
+        return Estimate(bucket, used / (l - f).TotalHours, now);
     }
 
-    private static DateTimeOffset? Eta(int percent, double perHour, DateTimeOffset now)
+    private static LimitEstimate? Estimate(UsageBucket bucket, double perHour, DateTimeOffset now)
     {
-        double hours = (100 - percent) / perHour;
+        if (bucket.Percent >= 100)
+        {
+            return null;
+        }
+
+        double hoursToFull = (100 - bucket.Percent) / perHour;
+        if (bucket.ResetsAt is { } reset && (reset - now).TotalHours < hoursToFull)
+        {
+            double hoursToReset = Math.Max(0, (reset - now).TotalHours);
+            // Rounded down: it stays below 100 % by definition.
+            return new LimitEstimate(null, (int)(bucket.Percent + (perHour * hoursToReset)));
+        }
+
         // Beyond a year the estimate means nothing (and DateTimeOffset could overflow).
-        return hours is > 0 and < 24 * 365 ? now + TimeSpan.FromHours(hours) : null;
+        return hoursToFull < 24 * 365 ? new LimitEstimate(now + TimeSpan.FromHours(hoursToFull), null) : null;
     }
 }
