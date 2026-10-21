@@ -31,7 +31,7 @@ public abstract class ObservableObject : INotifyPropertyChanged
     protected void Raise(string? name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }
 
-/// <summary>One stats row: label with its chart colour, bar, "NN %" and "resets in …".</summary>
+/// <summary>One stats row: label with its chart colour, bar, "NN %", "resets in …" and when 100 % would be hit.</summary>
 public sealed class BucketRow(string label, Brush swatch) : ObservableObject
 {
     public const string Missing = "—";
@@ -41,6 +41,8 @@ public sealed class BucketRow(string label, Brush swatch) : ObservableObject
     private double _barValue;
     private Brush _barBrush = Palette.Ok;
     private string _countdown = "";
+    private string _forecast = "";
+    private Brush _forecastBrush = Palette.TextMuted;
 
     /// <summary>Row label; the per-model row follows the model name in the latest snapshot ("Fable week").</summary>
     public string Label { get => _label; set => Set(ref _label, value); }
@@ -57,7 +59,14 @@ public sealed class BucketRow(string label, Brush swatch) : ObservableObject
 
     public string Countdown { get => _countdown; private set => Set(ref _countdown, value); }
 
-    public void Update(UsageBucket? bucket, DateTimeOffset now)
+    /// <summary>" · 100 % in 3h 10m" (separator only after a countdown); empty without an estimate.</summary>
+    public string Forecast { get => _forecast; private set => Set(ref _forecast, value); }
+
+    /// <summary>Red when 100 % would be hit before the reset, muted otherwise.</summary>
+    public Brush ForecastBrush { get => _forecastBrush; private set => Set(ref _forecastBrush, value); }
+
+    /// <param name="fullAt">Estimated time of reaching 100 % (see <see cref="LimitForecast"/>), if any.</param>
+    public void Update(UsageBucket? bucket, DateTimeOffset now, DateTimeOffset? fullAt = null)
     {
         if (bucket is null)
         {
@@ -65,6 +74,8 @@ public sealed class BucketRow(string label, Brush swatch) : ObservableObject
             BarValue = 0;
             BarBrush = Palette.Ok;
             Countdown = "";
+            Forecast = "";
+            ForecastBrush = Palette.TextMuted;
             return;
         }
 
@@ -73,6 +84,10 @@ public sealed class BucketRow(string label, Brush swatch) : ObservableObject
         BarValue = shown;
         BarBrush = Palette.BrushForPercent(bucket.Percent);
         Countdown = CountdownFormatter.Format(bucket.ResetsAt, now) is { } c ? "resets " + c : "";
+        Forecast = fullAt is { } full
+            ? (Countdown.Length > 0 ? " · " : "") + "100 % " + CountdownFormatter.Format(full, now)
+            : "";
+        ForecastBrush = fullAt < bucket.ResetsAt ? Palette.Critical : Palette.TextMuted;
     }
 }
 
@@ -159,9 +174,10 @@ public sealed class MainViewModel : ObservableObject
     {
         var now = _clock();
         var latest = _state.Latest;
-        Session.Update(latest?.Session, now);
-        Week.Update(latest?.Week, now);
-        ModelWeek.Update(latest?.ModelWeek, now);
+        var history = _state.History;
+        Session.Update(latest?.Session, now, LimitForecast.Session(latest?.Session, now));
+        Week.Update(latest?.Week, now, LimitForecast.Weekly(latest?.Week, history, s => s.Week, now));
+        ModelWeek.Update(latest?.ModelWeek, now, LimitForecast.Weekly(latest?.ModelWeek, history, s => s.ModelWeek, now));
         if (latest is not null)
         {
             ModelWeek.Label = latest.ModelWeekLabel;
@@ -183,7 +199,7 @@ public sealed class MainViewModel : ObservableObject
         }
 
         FooterHint = _transientHint ?? (CanCopy ? FooterFormat.CopyHint : "");
-        Samples = _state.History;
+        Samples = history;
         Now = now;
     }
 
