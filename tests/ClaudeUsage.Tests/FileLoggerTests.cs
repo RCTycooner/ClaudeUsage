@@ -21,6 +21,7 @@ public sealed class FileLoggerTests : IDisposable
 
         logger.Log("première", new InvalidOperationException("boom"), "raw · output");
         logger.Log("second");
+        Assert.True(logger.Flush());
 
         var bytes = File.ReadAllBytes(logger.Path);
         Assert.False(bytes is [0xEF, 0xBB, 0xBF, ..]);

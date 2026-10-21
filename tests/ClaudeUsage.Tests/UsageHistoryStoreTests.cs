@@ -40,6 +40,7 @@ public sealed class UsageHistoryStoreTests : IDisposable
         store.Load();
         store.Append(Snapshot(_now.AddMinutes(-1).AddMilliseconds(345), s: 2));
         store.Append(Snapshot(_now, f: null));
+        store.Flush();
 
         var loaded = CreateStore().Load();
 
@@ -59,6 +60,7 @@ public sealed class UsageHistoryStoreTests : IDisposable
     {
         var store = CreateStore();
         store.Append(Snapshot(_now));
+        store.Flush();
 
         var line = Assert.Single(File.ReadAllLines(store.Path));
 
@@ -79,7 +81,9 @@ public sealed class UsageHistoryStoreTests : IDisposable
             UsageHistoryStore.FormatLine(UsageSample.FromSnapshot(Snapshot(_now))),
         ]);
 
-        var loaded = CreateStore().Load();
+        var store = CreateStore();
+        var loaded = store.Load();
+        store.Flush();
 
         Assert.Equal(2, loaded.Count);
         Assert.Equal(_now - UsageHistoryStore.DefaultRetention + TimeSpan.FromDays(1), loaded[0].Taken);
@@ -95,6 +99,7 @@ public sealed class UsageHistoryStoreTests : IDisposable
 
         _now += UsageHistoryStore.DefaultRetention + TimeSpan.FromDays(1);
         store.Append(Snapshot(_now));
+        store.Flush();
 
         Assert.Single(store.Samples);
         Assert.Single(File.ReadAllLines(store.Path));
@@ -114,7 +119,9 @@ public sealed class UsageHistoryStoreTests : IDisposable
             UsageHistoryStore.FormatLine(UsageSample.FromSnapshot(Snapshot(_now))),
         ]);
 
-        var loaded = CreateStore().Load();
+        var store = CreateStore();
+        var loaded = store.Load();
+        store.Flush();
 
         Assert.Equal(2, loaded.Count);
         Assert.Equal(_now, loaded[1].Taken);
@@ -131,6 +138,7 @@ public sealed class UsageHistoryStoreTests : IDisposable
     {
         var store = CreateStore();
         store.Append(Snapshot(_now) with { ModelName = "Opus" });
+        store.Flush();
 
         var line = Assert.Single(File.ReadAllLines(store.Path));
         Assert.Contains("\"m\":\"Opus\"", line, StringComparison.Ordinal);
@@ -146,6 +154,7 @@ public sealed class UsageHistoryStoreTests : IDisposable
     {
         var store = CreateStore();
         store.Append(Snapshot(_now));
+        store.Flush();
         Assert.False(File.ReadAllBytes(store.Path) is [0xEF, 0xBB, 0xBF, ..]);
 
         File.WriteAllText(
@@ -153,7 +162,9 @@ public sealed class UsageHistoryStoreTests : IDisposable
             UsageHistoryStore.FormatLine(UsageSample.FromSnapshot(Snapshot(_now))) + "\n",
             new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
-        Assert.Single(CreateStore().Load());
+        var reloaded = CreateStore();
+        Assert.Single(reloaded.Load());
+        reloaded.Flush();
         Assert.False(File.ReadAllBytes(store.Path) is [0xEF, 0xBB, 0xBF, ..]);
     }
 

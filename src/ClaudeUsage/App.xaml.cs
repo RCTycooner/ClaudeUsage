@@ -121,6 +121,10 @@ public partial class App : Application, IDisposable
         _settingsStore?.Dispose();
         _showEvent?.Dispose();
         _listenerCts?.Dispose();
+
+        // History and log writes run in the background; let them finish (the poller is stopped, so none follow).
+        _history?.Flush();
+        _logger?.Flush();
         if (_instanceMutex is not null)
         {
             _instanceMutex.ReleaseMutex();
@@ -214,6 +218,7 @@ public partial class App : Application, IDisposable
     {
         var error = e.ExceptionObject as Exception;
         _logger?.Log($"Fatal unhandled exception (terminating: {e.IsTerminating}).", error, error?.StackTrace);
+        _logger?.Flush();
 
         // The process is going down; remove the tray icon so no ghost icon is left behind.
         try

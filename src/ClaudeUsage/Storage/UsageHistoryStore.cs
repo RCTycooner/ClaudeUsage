@@ -46,7 +46,8 @@ public sealed record UsageSample(
 
 /// <summary>
 /// history.jsonl: one compact JSON object per poll, append-only, pruned to the retention window on load and
-/// once a day. Corrupt lines are skipped. Thread-safe.
+/// once a day. Corrupt lines are skipped. Thread-safe. The in-memory list changes at once; file writes run in order
+/// on a background <see cref="SerialWriter"/>, so <see cref="Flush"/> before exit.
 /// </summary>
 public sealed class UsageHistoryStore
 {
@@ -63,6 +64,7 @@ public sealed class UsageHistoryStore
     private readonly Func<DateTimeOffset> _clock;
     private readonly Lock _gate = new();
     private readonly List<UsageSample> _samples = [];
+    private readonly SerialWriter _writer = new();
     private DateTimeOffset _lastPrune = DateTimeOffset.MinValue;
 
     public UsageHistoryStore(string folder, TimeSpan? retention = null, Func<DateTimeOffset>? clock = null)
@@ -101,6 +103,8 @@ public sealed class UsageHistoryStore
     /// <summary>Reads the file (missing file = empty), skips corrupt lines, then prunes.</summary>
     public IReadOnlyList<UsageSample> Load()
     {
+        // Read what earlier queued writes leave behind, not a file that is still being written.
+        _writer.Flush();
         lock (_gate)
         {
             _samples.Clear();
@@ -147,7 +151,7 @@ public sealed class UsageHistoryStore
         lock (_gate)
         {
             _samples.Add(sample);
-            TryWrite(() => File.AppendAllText(Path, FormatLine(sample) + "\n", TextFiles.Utf8NoBom));
+            QueueWrite(() => File.AppendAllText(Path, FormatLine(sample) + "\n", TextFiles.Utf8NoBom));
             if (_clock() - _lastPrune >= s_pruneEvery)
             {
                 PruneLocked(rewriteAlways: false);
@@ -165,6 +169,9 @@ public sealed class UsageHistoryStore
             PruneLocked(rewriteAlways: false);
         }
     }
+
+    /// <summary>Waits for queued file writes to finish; false if <paramref name="timeout"/> ran out first.</summary>
+    public bool Flush(TimeSpan? timeout = null) => _writer.Flush(timeout);
 
     public static string FormatLine(UsageSample sample)
     {
@@ -206,13 +213,18 @@ public sealed class UsageHistoryStore
         int removed = _samples.RemoveAll(s => s.Taken < cutoff);
         if (removed > 0 || rewriteAlways)
         {
-            var text = new StringBuilder();
-            foreach (var s in _samples)
+            // Only the copy is made here; formatting and writing happen on the writer.
+            UsageSample[] samples = [.. _samples];
+            QueueWrite(() =>
             {
-                text.Append(FormatLine(s)).Append('\n');
-            }
+                var text = new StringBuilder();
+                foreach (var s in samples)
+                {
+                    text.Append(FormatLine(s)).Append('\n');
+                }
 
-            TryWrite(() => TextFiles.WriteAllTextAtomic(Path, text.ToString()));
+                TextFiles.WriteAllTextAtomic(Path, text.ToString());
+            });
         }
     }
 
@@ -223,7 +235,8 @@ public sealed class UsageHistoryStore
         return stream.ReadAtLeast(head, 3, throwOnEndOfStream: false) == 3 && head is [0xEF, 0xBB, 0xBF];
     }
 
-    private void TryWrite(Action write)
+    /// <summary>Called under the lock, so the file sees writes in the order the list changed.</summary>
+    private void QueueWrite(Action write) => _writer.Enqueue(() =>
     {
         try
         {
@@ -234,7 +247,7 @@ public sealed class UsageHistoryStore
         {
             // Losing a history write is not fatal; the in-memory list stays correct.
         }
-    }
+    });
 
     private sealed class Line
     {
