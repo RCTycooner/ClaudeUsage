@@ -25,7 +25,7 @@ public sealed partial class TrayIcon : IDisposable
     private readonly WinForms.ToolStripMenuItem _modelItem;
     private readonly WinForms.ToolStripMenuItem _projectsItem;
     private readonly ProjectCatalog _projects;
-    private Drawing.Icon _icon;
+    private readonly Drawing.Icon _icon;
     private UsageSnapshot? _snapshot;
     private bool _ignoreNextMouseUp;
     private bool _disposed;
@@ -34,7 +34,7 @@ public sealed partial class TrayIcon : IDisposable
     {
         _startup = startup;
         _projects = projects;
-        _icon = CreateFallbackIcon();
+        _icon = CreateIcon();
         _menu = new WinForms.ContextMenuStrip();
 
         _sessionItem = AddStatItem();
@@ -86,15 +86,19 @@ public sealed partial class TrayIcon : IDisposable
     public void SetRefreshing(bool refreshing) => _refreshItem.Enabled = !refreshing;
 
     /// <summary>
-    /// Shows the last known snapshot in the icon, tooltip and stat items. With <paramref name="hasError"/> the last
-    /// known values stay, marked as stale (tooltip prefix, red dot on the icon); "!" only when there is no data.
+    /// Shows the last known snapshot in the tooltip and stat items. With <paramref name="hasError"/> the last known
+    /// values stay, marked as stale in the tooltip. The icon itself is static.
     /// </summary>
     public void Update(UsageSnapshot? snapshot, bool hasError = false)
     {
         _snapshot = snapshot;
-        _notifyIcon.Text = UsageText.Truncate(UsageText.Tooltip(snapshot, hasError));
+        string text = UsageText.Truncate(UsageText.Tooltip(snapshot, hasError));
+        if (!string.Equals(_notifyIcon.Text, text, StringComparison.Ordinal))
+        {
+            _notifyIcon.Text = text;
+        }
+
         RefreshStatItems();
-        UpdateIcon(snapshot, hasError);
     }
 
     /// <summary>Hides and disposes the icon. Safe to call more than once (also from the crash handler).</summary>
@@ -116,31 +120,10 @@ public sealed partial class TrayIcon : IDisposable
         _icon.Dispose();
     }
 
-    private static Drawing.Icon CreateFallbackIcon()
+    /// <summary>Renders the static icon once at the tray's small icon size.</summary>
+    private static Drawing.Icon CreateIcon()
     {
-        string? exe = Environment.ProcessPath;
-        if (exe is not null)
-        {
-            try
-            {
-                var icon = Drawing.Icon.ExtractAssociatedIcon(exe);
-                if (icon is not null)
-                {
-                    return icon;
-                }
-            }
-            catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
-            {
-                // Fall through to a rendered icon.
-            }
-        }
-
-        return CreateIcon(null, hasError: false);
-    }
-
-    private static Drawing.Icon CreateIcon(int? percent, bool hasError)
-    {
-        using var bitmap = TrayIconRenderer.Render(percent, hasError, WinForms.SystemInformation.SmallIconSize);
+        using var bitmap = TrayIconRenderer.Render(WinForms.SystemInformation.SmallIconSize);
 
         // Clone so the icon owns its data, then free the GDI handle from GetHicon.
         nint hIcon = bitmap.GetHicon();
@@ -153,23 +136,6 @@ public sealed partial class TrayIcon : IDisposable
         {
             DestroyIcon(hIcon);
         }
-    }
-
-    private void UpdateIcon(UsageSnapshot? snapshot, bool hasError)
-    {
-        int? highest = null;
-        foreach (var bucket in new[] { snapshot?.Session, snapshot?.Week, snapshot?.ModelWeek })
-        {
-            if (bucket is not null)
-            {
-                highest = Math.Max(highest ?? 0, bucket.Percent);
-            }
-        }
-
-        var old = _icon;
-        _icon = highest is null && !hasError ? CreateFallbackIcon() : CreateIcon(highest, hasError);
-        _notifyIcon.Icon = _icon;
-        old.Dispose();
     }
 
     private static void OpenDataFolder()
