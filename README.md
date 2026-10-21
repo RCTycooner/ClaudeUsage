@@ -7,7 +7,8 @@ A small Windows tray widget that shows your Claude plan usage (session, week, an
 - Borderless, draggable window; closing it hides it to the tray.
 - Optional "stay on top"; window position and that setting are remembered.
 - A 7-day chart in the widget. The expand button opens a resizable history window over everything stored (up to 90 days): 1D / 7D / 30D / All presets, zoom (buttons, mouse wheel at the cursor, + / −), scrolling (scroll bar, drag, Shift+wheel, arrow keys), a "Now" button that follows new readings, and a hover read-out of the values at any point.
-- Tray menu: current stats, Show UI, Refresh now, Open data folder, Start with Windows, Quit.
+- Tray menu: current stats, Show UI, Claude projects, Refresh now, Open data folder, Start with Windows, Quit.
+- Claude projects: at startup the app scans `projectsRoot` in `settings.json` (default `D:\`) in the background for folders with a `CLAUDE.md`, skipping hidden/system folders, junctions, `.git`, `.claude` (worktrees), `node_modules`, `bin`, `obj` and `packages`. The list is in the tray menu and behind the prompt button in the widget's header; each entry shows the folder name (full path as tooltip) and opens a PowerShell window there running `claude` (`powershell.exe -NoExit -Command claude`). Restart the app to rescan.
 - Start with Windows adds `"<path>\ClaudeUsage.exe" --hidden` to `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, so it starts in the tray without opening the window. If the exe moves, the menu item shows unchecked; tick it again to update the entry.
 
 ## Requirements
@@ -31,7 +32,7 @@ Once a minute the app runs `claude -p "/usage" --output-format json --no-session
 | File | Contents |
 |---|---|
 | `history.jsonl` | one sample per poll, kept for 90 days; used for the charts |
-| `settings.json` | stay-on-top, window position, optional `claude` path override |
+| `settings.json` | stay-on-top, window position, optional `claude` path override, `projectsRoot` for the projects menu |
 | `log.txt` | errors, unparsable output, crashes, and usage lines that disappeared from the output |
 
 All files are UTF-8 without BOM.

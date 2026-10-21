@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using ClaudeUsage.Projects;
 using ClaudeUsage.Storage;
 using ClaudeUsage.Tray;
 using ClaudeUsage.UI;
@@ -70,8 +71,12 @@ public partial class App : Application, IDisposable
         var settings = ApplyStartWithWindows(startup, _settingsStore.Load());
         var viewModel = new MainViewModel(UsageState);
         viewModel.Start();
-        _window = new MainWindow(_settingsStore, settings, viewModel);
-        _tray = new TrayIcon(startup);
+        var projects = new ProjectCatalog(settings.EffectiveProjectsRoot);
+        _window = new MainWindow(_settingsStore, settings, viewModel, projects);
+        _window.OpenProjectRequested += (_, project) => OpenProject(project);
+        _tray = new TrayIcon(startup, projects);
+        _tray.OpenProjectRequested += (_, project) => OpenProject(project);
+        _ = ScanProjectsAsync(projects);
         _tray.StartWithWindowsChanged += (_, enabled) => _window.SetStartWithWindows(enabled);
         _tray.ShowUiRequested += (_, _) => ShowWindow();
         _tray.QuitRequested += (_, _) => Quit();
@@ -261,6 +266,37 @@ public partial class App : Application, IDisposable
         finally
         {
             _tray?.SetRefreshing(false);
+        }
+    }
+
+    /// <summary>Scans the projects root off the UI thread; the menus show "Scanning…" until it finishes.</summary>
+    private async Task ScanProjectsAsync(ProjectCatalog catalog)
+    {
+        IReadOnlyList<ClaudeProject> found;
+        try
+        {
+            found = await Task.Run(() => ProjectScanner.Scan(catalog.Root));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            _logger?.Log($"Could not scan {catalog.Root} for projects.", ex);
+            found = [];
+        }
+
+        catalog.SetProjects(found);
+    }
+
+    private void OpenProject(ClaudeProject project)
+    {
+        try
+        {
+            ProjectLauncher.Open(project);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            _logger?.Log($"Could not open PowerShell in {project.Directory}.", ex);
+            MessageBox.Show($"Could not open PowerShell in {project.Directory}:\n{ex.Message}", "Claude usage",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
