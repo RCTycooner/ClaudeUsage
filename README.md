@@ -19,7 +19,7 @@ A small Windows tray widget that shows your Claude plan usage (session, week, an
 
 ## How it gets data
 
-Once a minute the app runs `claude -p "/usage" --output-format json --no-session-persistence`. This is a local command: it does not call the model and uses no tokens. The output text is parsed into the three usage buckets; if the format changes, the window shows the raw text.
+Every 5 minutes (and on "Refresh now" in the tray menu) the app runs `claude -p "/usage" --output-format json --no-session-persistence`. This is a local command: it does not call the model and uses no tokens. The output text is parsed into the three usage buckets; if the format changes, the window shows the raw text.
 
 `claude` is looked up in this order: `claudePath` in `settings.json`, `claude.exe` on `PATH`, `%USERPROFILE%\.local\bin\claude.exe` (native installer), then an npm `claude.cmd` shim on `PATH` or in `%APPDATA%\npm`. A `.cmd` shim is run through `cmd.exe /d /s /c`. The child process does not inherit the variables of a Claude Code session the widget may have been started from (`CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, session ids), and runs with `DISABLE_AUTOUPDATER=1`.
 
