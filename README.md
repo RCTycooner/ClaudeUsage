@@ -11,10 +11,14 @@ A small Windows tray widget that shows your Claude plan usage (session, week, an
 - Claude projects: at startup the app scans `projectsRoot` in `settings.json` (default `D:\`) in the background for folders with a `CLAUDE.md`, skipping hidden/system folders, junctions, `.git`, `.claude` (worktrees), `node_modules`, `bin`, `obj` and `packages`. The list is in the tray menu and behind the prompt button in the widget's header; each entry shows the folder name (full path as tooltip) and opens a PowerShell window there running `claude` (`powershell.exe -NoExit -Command claude`). "Rescan" at the bottom of either menu scans again (e.g. after `/init` in a new folder).
 - Start with Windows adds `"<path>\ClaudeUsage.exe" --hidden` to `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, so it starts in the tray without opening the window. If the exe moves, the menu item shows unchecked; tick it again to update the entry.
 
+## Download
+
+Get `ClaudeUsage-vX.Y.Z-win-x64.zip` from the [latest release](https://github.com/RCTycooner/ClaudeUsage/releases/latest), extract it to a folder of your choice (e.g. `%LOCALAPPDATA%\Programs\ClaudeUsage`), and run `ClaudeUsage.exe`. The release build is self-contained: no .NET install needed. Windows SmartScreen may warn because the exe isn't signed; choose "More info" → "Run anyway".
+
 ## Requirements
 
 - Windows 10/11
-- [.NET 10 runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (desktop)
+- [.NET 10 runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (desktop), only when building from source
 - [Claude Code](https://claude.com/claude-code) installed and logged in with a subscription (Pro/Max)
 
 ## How it gets data
@@ -47,6 +51,8 @@ dotnet publish src/ClaudeUsage -p:PublishProfile=win-x64   # -> publish/ClaudeUs
 ```
 
 A running instance locks its `.exe`; stop it before building.
+
+Releases are built by `.github/workflows/release.yml`: push a tag (`git tag v1.2.0; git push origin v1.2.0`) or run the "Release" workflow from the Actions tab with a version number. It runs the tests, publishes a self-contained single-file exe, and attaches the zip to a GitHub release with generated notes. A version with a suffix (`1.2.0-beta.1`) is marked as a pre-release.
 
 Command-line switches:
 

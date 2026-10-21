@@ -1,0 +1,80 @@
+# Builds a self-contained ClaudeUsage.exe, zips it, and publishes it as a GitHub Release.
+# Trigger: push a tag like v1.2.0 (git tag v1.2.0 && git push origin v1.2.0),
+# or run it by hand from the Actions tab with a version number.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, e.g. 1.2.0 (creates tag v1.2.0 on the selected branch)'
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          $v = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') { $env:INPUT_VERSION } else { $env:GITHUB_REF_NAME }
+          $v = $v.Trim().TrimStart('v')
+          if ($v -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') { throw "Version '$v' is not of the form 1.2.3 or 1.2.3-beta.1" }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          "tag=v$v" >> $env:GITHUB_OUTPUT
+
+      - name: Test
+        run: dotnet test ClaudeUsage.sln -c Release
+
+      - name: Publish
+        run: >
+          dotnet publish src/ClaudeUsage/ClaudeUsage.csproj
+          -c Release -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:DebugType=none
+          -p:Version=${{ steps.version.outputs.version }}
+          -o publish
+
+      - name: Zip
+        id: zip
+        shell: pwsh
+        run: |
+          $zip = "ClaudeUsage-${{ steps.version.outputs.tag }}-win-x64.zip"
+          Compress-Archive -Path publish/* -DestinationPath $zip
+          "file=$zip" >> $env:GITHUB_OUTPUT
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          ZIP: ${{ steps.zip.outputs.file }}
+        run: |
+          # On a manual run the tag doesn't exist yet; --target creates it on the checked-out commit.
+          $ghArgs = @($env:TAG, $env:ZIP, '--title', "Claude Usage $env:TAG", '--generate-notes', '--target', $env:GITHUB_SHA)
+          if ($env:TAG -match '-') { $ghArgs += '--prerelease' }
+          gh release create @ghArgs
