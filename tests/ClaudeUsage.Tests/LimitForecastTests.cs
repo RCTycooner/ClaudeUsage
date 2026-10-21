@@ -14,10 +14,28 @@ public sealed class LimitForecastTests
     [Fact]
     public void Session_extrapolates_the_rate_since_it_started()
     {
-        // Started 2 h ago (resets in 3 h), 40 % used: 20 %/h, so 60 % more takes 3 h.
-        var bucket = new UsageBucket(40, s_now.AddHours(3));
+        // Started 2 h ago (resets in 3 h), 60 % used: 30 %/h, so 40 % more takes 80 min.
+        var bucket = new UsageBucket(60, s_now.AddHours(3));
 
-        Assert.Equal(s_now.AddHours(3), LimitForecast.Session(bucket, s_now));
+        Assert.Equal(new LimitEstimate(s_now.AddMinutes(80), null), LimitForecast.Session(bucket, s_now));
+    }
+
+    [Fact]
+    public void Session_that_resets_first_gives_the_percent_at_reset()
+    {
+        // Started 2 h ago (resets in 3 h), 20 % used: 10 %/h, so 50 % by the reset.
+        var bucket = new UsageBucket(20, s_now.AddHours(3));
+
+        Assert.Equal(new LimitEstimate(null, 50), LimitForecast.Session(bucket, s_now));
+    }
+
+    [Fact]
+    public void Percent_at_reset_is_rounded_down()
+    {
+        // 33 % in 2 h = 16.5 %/h; 3 h more gives 82.5 %.
+        var bucket = new UsageBucket(33, s_now.AddHours(3));
+
+        Assert.Equal(new LimitEstimate(null, 82), LimitForecast.Session(bucket, s_now));
     }
 
     [Theory]
@@ -42,9 +60,30 @@ public sealed class LimitForecastTests
         // 30 % added over 3 days = 10 %/day; 60 % left takes 6 days.
         var history = new[] { Week(s_now.AddDays(-3), 10), Week(s_now.AddDays(-1), 25), Week(s_now, 40) };
 
-        var eta = LimitForecast.Weekly(new UsageBucket(40, s_now.AddDays(2)), history, s => s.Week, s_now);
+        var estimate = LimitForecast.Weekly(new UsageBucket(40, s_now.AddDays(7)), history, s => s.Week, s_now);
 
-        Assert.Equal(s_now.AddDays(6), eta);
+        Assert.Equal(new LimitEstimate(s_now.AddDays(6), null), estimate);
+    }
+
+    [Fact]
+    public void Weekly_that_resets_first_gives_the_percent_at_reset()
+    {
+        // 10 %/day as above; 2 days to the reset adds 20 %.
+        var history = new[] { Week(s_now.AddDays(-3), 10), Week(s_now.AddDays(-1), 25), Week(s_now, 40) };
+
+        var estimate = LimitForecast.Weekly(new UsageBucket(40, s_now.AddDays(2)), history, s => s.Week, s_now);
+
+        Assert.Equal(new LimitEstimate(null, 60), estimate);
+    }
+
+    [Fact]
+    public void Weekly_without_reset_time_still_estimates_when_full()
+    {
+        var history = new[] { Week(s_now.AddDays(-3), 10), Week(s_now, 40) };
+
+        var estimate = LimitForecast.Weekly(new UsageBucket(40, null), history, s => s.Week, s_now);
+
+        Assert.Equal(new LimitEstimate(s_now.AddDays(6), null), estimate);
     }
 
     [Fact]
@@ -59,10 +98,10 @@ public sealed class LimitForecastTests
             Week(s_now, 20),
         };
 
-        var eta = LimitForecast.Weekly(new UsageBucket(20, s_now.AddDays(6)), history, s => s.Week, s_now);
+        var estimate = LimitForecast.Weekly(new UsageBucket(20, s_now.AddDays(9)), history, s => s.Week, s_now);
 
         // 20 + 10 + 10 = 40 % over 4 days = 10 %/day; 80 % left takes 8 days.
-        Assert.Equal(s_now.AddDays(8), eta);
+        Assert.Equal(new LimitEstimate(s_now.AddDays(8), null), estimate);
     }
 
     [Fact]
@@ -76,11 +115,11 @@ public sealed class LimitForecastTests
     }
 
     [Fact]
-    public void Row_shows_estimate_in_red_when_it_comes_before_the_reset()
+    public void Row_shows_time_to_full_in_red_when_it_comes_before_the_reset()
     {
         var row = new BucketRow("Session", Palette.SessionSeries);
 
-        row.Update(new UsageBucket(40, s_now.AddHours(3)), s_now, s_now.AddHours(2));
+        row.Update(new UsageBucket(60, s_now.AddHours(3)), s_now, new LimitEstimate(s_now.AddHours(2), null));
 
         Assert.Equal("resets in 3h 0m", row.Countdown);
         Assert.Equal(" · 100 % in 2h 0m", row.Forecast);
@@ -88,17 +127,28 @@ public sealed class LimitForecastTests
     }
 
     [Fact]
-    public void Row_shows_estimate_muted_when_the_reset_comes_first()
+    public void Row_shows_percent_at_reset_muted_when_the_reset_comes_first()
     {
         var row = new BucketRow("Week", Palette.WeekSeries);
 
-        row.Update(new UsageBucket(40, s_now.AddDays(2)), s_now, s_now.AddDays(6));
+        row.Update(new UsageBucket(40, s_now.AddDays(2)), s_now, new LimitEstimate(null, 60));
 
-        Assert.Equal(" · 100 % in 6d 0h", row.Forecast);
+        Assert.Equal(" · ~60 % at reset", row.Forecast);
         Assert.Same(Palette.TextMuted, row.ForecastBrush);
 
         row.Update(new UsageBucket(40, s_now.AddDays(2)), s_now);
 
         Assert.Equal("", row.Forecast);
+    }
+
+    [Fact]
+    public void Row_without_reset_time_shows_time_to_full_muted()
+    {
+        var row = new BucketRow("Fable week", Palette.ModelSeries);
+
+        row.Update(new UsageBucket(40, null), s_now, new LimitEstimate(s_now.AddDays(6), null));
+
+        Assert.Equal("100 % in 6d 0h", row.Forecast);
+        Assert.Same(Palette.TextMuted, row.ForecastBrush);
     }
 }
