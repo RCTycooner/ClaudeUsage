@@ -94,7 +94,24 @@ public sealed class ProjectScannerTests : IDisposable
         Assert.Equal("powershell.exe", psi.FileName);
         Assert.Equal("-NoExit -Command claude", psi.Arguments);
         Assert.Equal(@"D:\Git\Othello", psi.WorkingDirectory);
-        Assert.True(psi.UseShellExecute);
+        Assert.False(psi.UseShellExecute);
+    }
+
+    [Fact]
+    public void Launcher_does_not_pass_on_parent_claude_session_variables()
+    {
+        Environment.SetEnvironmentVariable("CLAUDE_CODE_CHILD_SESSION", "1");
+        try
+        {
+            var psi = ProjectLauncher.CreateStartInfo(@"D:\Git\Othello");
+
+            Assert.False(psi.Environment.ContainsKey("CLAUDE_CODE_CHILD_SESSION"));
+            Assert.False(psi.Environment.ContainsKey("DISABLE_AUTOUPDATER"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CLAUDE_CODE_CHILD_SESSION", null);
+        }
     }
 
     private string AddProject(string relative)

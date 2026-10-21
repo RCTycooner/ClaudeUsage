@@ -132,11 +132,20 @@ public sealed class ClaudeCliUsageSource : IUsageSource
     }
 
     /// <summary>
-    /// Removes variables a parent Claude Code session sets (CLAUDECODE, CLAUDE_CODE_ENTRYPOINT, session ids, IPC
-    /// sockets), so a widget started from a Claude Code terminal does not make the child think it is nested, and
-    /// disables the auto-updater for these short-lived runs.
+    /// <see cref="RemoveSessionVariables"/>, plus disabling the auto-updater for these short-lived runs.
     /// </summary>
     public static void SanitizeEnvironment(IDictionary<string, string?> environment)
+    {
+        RemoveSessionVariables(environment);
+        environment["DISABLE_AUTOUPDATER"] = "1";
+    }
+
+    /// <summary>
+    /// Removes variables a parent Claude Code session sets (CLAUDECODE, CLAUDE_CODE_ENTRYPOINT, session ids, IPC
+    /// sockets, CLAUDE_CODE_CHILD_SESSION), so a widget started from a Claude Code terminal does not make the child
+    /// think it is nested.
+    /// </summary>
+    public static void RemoveSessionVariables(IDictionary<string, string?> environment)
     {
         ArgumentNullException.ThrowIfNull(environment);
         foreach (var name in environment.Keys.ToList())
@@ -149,8 +158,6 @@ public sealed class ClaudeCliUsageSource : IUsageSource
                 environment.Remove(name);
             }
         }
-
-        environment["DISABLE_AUTOUPDATER"] = "1";
     }
 
     /// <summary>
