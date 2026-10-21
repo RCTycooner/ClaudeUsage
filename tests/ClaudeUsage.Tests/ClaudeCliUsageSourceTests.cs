@@ -119,7 +119,7 @@ public sealed class ClaudeCliUsageSourceTests
         var psi = ClaudeCliUsageSource.CreateStartInfo(@"C:\Users\me\.local\bin\claude.exe", @"C:\data");
 
         Assert.Equal(@"C:\Users\me\.local\bin\claude.exe", psi.FileName);
-        Assert.Equal(["-p", "/usage", "--output-format", "json", "--no-session-persistence"], psi.ArgumentList);
+        Assert.Equal(["-p", "/usage", "--output-format", "json", "--no-session-persistence", "--strict-mcp-config"], psi.ArgumentList);
         Assert.False(psi.UseShellExecute);
         Assert.True(psi.CreateNoWindow);
     }
@@ -132,7 +132,7 @@ public sealed class ClaudeCliUsageSourceTests
         Assert.EndsWith("cmd.exe", psi.FileName, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(psi.ArgumentList);
         Assert.Equal(
-            "/d /s /c \"\"C:\\Users\\Jane Doe\\AppData\\Roaming\\npm\\claude.cmd\" -p /usage --output-format json --no-session-persistence\"",
+            "/d /s /c \"\"C:\\Users\\Jane Doe\\AppData\\Roaming\\npm\\claude.cmd\" -p /usage --output-format json --no-session-persistence --strict-mcp-config\"",
             psi.Arguments);
     }
 

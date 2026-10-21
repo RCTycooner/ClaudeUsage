@@ -8,7 +8,7 @@ Status: proposed (2026-10-18). Written after verifying the data source on this m
 ### Data source (verified)
 
 ```
-claude.exe -p "/usage" --output-format json --no-session-persistence
+claude.exe -p "/usage" --output-format json --no-session-persistence --strict-mcp-config
 ```
 
 - `/usage` is a **local command**: the JSON result has `"local_command":"usage"`, `num_turns: 0`,
@@ -17,6 +17,9 @@ claude.exe -p "/usage" --output-format json --no-session-persistence
   `CreateNoWindow = true`, and an arbitrary working directory (use the app's data folder, not a
   project folder, so no project CLAUDE.md/hooks are picked up).
 - `--no-session-persistence` stops it writing a session file under `~/.claude/projects/` per poll.
+- `--strict-mcp-config` with no `--mcp-config` starts no MCP servers. Without it, `-p` mode starts the
+  user's configured servers (stdio processes such as `node_repl` via cmd.exe, claude.ai connectors) on
+  every poll, although `/usage` needs none of them.
 - Do **not** use `--bare`: it disables OAuth, so `/usage` has nothing to report.
 - The binary lives at `%USERPROFILE%\.local\bin\claude.exe` (also on PATH). Resolve via PATH first,
   fall back to that path, allow an override in settings.

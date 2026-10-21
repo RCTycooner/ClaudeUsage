@@ -6,7 +6,7 @@ using System.Text.Json;
 namespace ClaudeUsage.Usage;
 
 /// <summary>
-/// Runs <c>claude -p "/usage" --output-format json --no-session-persistence</c> and returns the envelope's
+/// Runs <c>claude -p "/usage" --output-format json --no-session-persistence --strict-mcp-config</c> and returns the envelope's
 /// <c>result</c> text. <c>/usage</c> is a local command: no model call, no tokens.
 /// </summary>
 public sealed class ClaudeCliUsageSource : IUsageSource
@@ -16,7 +16,14 @@ public sealed class ClaudeCliUsageSource : IUsageSource
 
     private const int MaxDetailChars = 500;
     private static readonly TimeSpan s_timeout = TimeSpan.FromSeconds(30);
-    private static readonly string[] s_arguments = ["-p", "/usage", "--output-format", "json", "--no-session-persistence"];
+
+    /// <summary>
+    /// <c>--strict-mcp-config</c> without <c>--mcp-config</c> starts no MCP servers: /usage needs none, and otherwise
+    /// every poll would spawn the user's configured servers (stdio processes, claude.ai connectors). Not
+    /// <c>--bare</c>: that disables OAuth, so /usage would report nothing.
+    /// </summary>
+    private static readonly string[] s_arguments =
+        ["-p", "/usage", "--output-format", "json", "--no-session-persistence", "--strict-mcp-config"];
 
     /// <summary>Variables that tie a process to a running Claude Code session; the child must not inherit them.</summary>
     private static readonly string[] s_sessionVariables = ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_PID", "CLAUDE_JOB_DIR"];
