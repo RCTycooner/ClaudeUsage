@@ -105,7 +105,33 @@ public sealed class MainViewModelTests
 
         Assert.Equal("updated 5 min ago", vm.FooterText);
         Assert.Equal("resets in 4h 50m", vm.Session.Countdown);
+    }
+
+    [Fact]
+    public void Chart_moves_only_when_a_poll_brings_new_data()
+    {
+        var now = s_now;
+        var state = new UsageState();
+        var vm = new MainViewModel(state, () => now);
+        state.SetSnapshot(Snapshot(3, 17, 22), []);
+        var samples = vm.Samples;
+        Assert.Equal(s_now, vm.Now);
+
+        // Timer tick: text only, the chart keeps its window.
+        now = now.AddMinutes(5);
+        vm.Refresh();
+        Assert.Equal(s_now, vm.Now);
+        Assert.Same(samples, vm.Samples);
+
+        // A failed poll brings no data either.
+        state.SetFailure(new UsagePollFailure(now, "boom", null, new InvalidOperationException()));
+        Assert.Equal(s_now, vm.Now);
+
+        // A new snapshot moves it.
+        var history = new List<UsageSample>();
+        state.SetSnapshot(Snapshot(4, 17, 22), history);
         Assert.Equal(now, vm.Now);
+        Assert.Same(history, vm.Samples);
     }
 
     [Fact]

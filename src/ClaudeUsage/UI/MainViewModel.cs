@@ -99,8 +99,10 @@ public sealed class BucketRow(string label, Brush swatch) : ObservableObject
 }
 
 /// <summary>
-/// Window view model over <see cref="UsageState"/>. Re-renders countdowns and the "updated … ago" footer on a
-/// 15 s timer, so they stay current even while polls fail.
+/// Window view model over <see cref="UsageState"/>. The chart (<see cref="Samples"/>, <see cref="Now"/>) only moves
+/// when a poll delivers a new snapshot: the widget window is layered (transparent, drop shadow), so every chart
+/// redraw is costly. The countdowns, forecasts and "updated … ago" footer are text and are re-rendered on a 15 s
+/// timer, so they stay current between polls and while polls fail.
 /// </summary>
 public sealed class MainViewModel : ObservableObject
 {
@@ -123,6 +125,14 @@ public sealed class MainViewModel : ObservableObject
     private IReadOnlyList<UsageSample> _samples = [];
     private DateTimeOffset _now;
 
+    // The chart follows this snapshot; a different one in the state means a poll delivered new data.
+    private UsageSnapshot? _chartSnapshot;
+    private bool _chartSet;
+
+    // History samples within LimitForecast.WeeklyWindow of the last data refresh: a superset of what the weekly
+    // forecasts read at any later tick, so the timer does not rescan the whole history.
+    private IReadOnlyList<UsageSample> _recent = [];
+
     public MainViewModel(UsageState state, Func<DateTimeOffset>? clock = null, Func<string, bool>? copy = null)
     {
         ArgumentNullException.ThrowIfNull(state);
@@ -135,8 +145,8 @@ public sealed class MainViewModel : ObservableObject
         ModelWeek = new BucketRow(UsageSnapshot.DefaultModelWeekLabel, Palette.ModelSeries);
         Rows = [Session, Week, ModelWeek];
 
-        _state.Changed += (_, _) => Refresh();
-        Refresh();
+        _state.Changed += (_, _) => OnStateChanged();
+        OnStateChanged();
     }
 
     public BucketRow Session { get; }
@@ -164,7 +174,7 @@ public sealed class MainViewModel : ObservableObject
 
     public DateTimeOffset Now { get => _now; private set => Set(ref _now, value); }
 
-    /// <summary>Starts the 15 s re-render timer on the current dispatcher.</summary>
+    /// <summary>Starts the 15 s text re-render timer on the current dispatcher.</summary>
     public void Start()
     {
         if (_tick is not null)
@@ -177,14 +187,17 @@ public sealed class MainViewModel : ObservableObject
         _tick.Start();
     }
 
+    /// <summary>
+    /// Re-renders the text (rows and footer) for the current time. Leaves the chart alone: <see cref="Samples"/> and
+    /// <see cref="Now"/> only change when the state gets a new snapshot.
+    /// </summary>
     public void Refresh()
     {
         var now = _clock();
         var latest = _state.Latest;
-        var history = _state.History;
         Session.Update(latest?.Session, now, LimitForecast.Session(latest?.Session, now));
-        Week.Update(latest?.Week, now, LimitForecast.Weekly(latest?.Week, history, s => s.Week, now));
-        ModelWeek.Update(latest?.ModelWeek, now, LimitForecast.Weekly(latest?.ModelWeek, history, s => s.ModelWeek, now));
+        Week.Update(latest?.Week, now, LimitForecast.Weekly(latest?.Week, _recent, s => s.Week, now));
+        ModelWeek.Update(latest?.ModelWeek, now, LimitForecast.Weekly(latest?.ModelWeek, _recent, s => s.ModelWeek, now));
         if (latest is not null)
         {
             ModelWeek.Label = latest.ModelWeekLabel;
@@ -206,8 +219,24 @@ public sealed class MainViewModel : ObservableObject
         }
 
         FooterHint = _transientHint ?? (CanCopy ? FooterFormat.CopyHint : "");
-        Samples = history;
-        Now = now;
+    }
+
+    /// <summary>A poll finished: moves the chart when it brought a new snapshot (not on a failure), then the text.</summary>
+    private void OnStateChanged()
+    {
+        if (!_chartSet || !ReferenceEquals(_state.Latest, _chartSnapshot))
+        {
+            var now = _clock();
+            var history = _state.History;
+            var from = now - LimitForecast.WeeklyWindow;
+            _recent = history.Where(s => s.Taken >= from).ToList();
+            _chartSnapshot = _state.Latest;
+            _chartSet = true;
+            Samples = history;
+            Now = now;
+        }
+
+        Refresh();
     }
 
     /// <summary>Copies the raw output of the failed poll and briefly confirms in the footer.</summary>
