@@ -46,6 +46,9 @@ public partial class MainWindow : Window
     /// <summary>Raised when the user picks "Rescan" in the projects button's menu.</summary>
     public event EventHandler? RescanProjectsRequested;
 
+    /// <summary>Raised when the user clicks the settings button.</summary>
+    public event EventHandler? SettingsRequested;
+
     public void ShowAndActivate()
     {
         if (!IsVisible)
@@ -61,7 +64,19 @@ public partial class MainWindow : Window
         Activate();
     }
 
+    /// <summary>The kept settings with the current position and stay-on-top.</summary>
+    public AppSettings Settings => CurrentSettings();
+
     public void SaveNow() => _store.Save(CurrentSettings());
+
+    /// <summary>Takes settings edited in the settings window, applies stay-on-top and saves straight away.</summary>
+    public void ApplySettings(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        _settings = settings;
+        Topmost = settings.Topmost;
+        SaveNow();
+    }
 
     /// <summary>Records the Start-with-Windows choice in the kept settings and queues a save.</summary>
     public void SetStartWithWindows(bool enabled)
@@ -164,6 +179,8 @@ public partial class MainWindow : Window
 
         _history.Activate();
     }
+
+    private void OnSettingsClick(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke(this, EventArgs.Empty);
 
     private void OnPinChanged(object sender, RoutedEventArgs e) => QueueSave();
 

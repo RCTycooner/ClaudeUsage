@@ -49,6 +49,7 @@ public sealed partial class TrayIcon : IDisposable
         _startupItem = new WinForms.ToolStripMenuItem("Start with Windows") { CheckOnClick = false };
         _startupItem.Click += OnStartupClick;
         _menu.Items.Add(_startupItem);
+        _menu.Items.Add("Settings…", null, (_, _) => SettingsRequested?.Invoke(this, EventArgs.Empty));
         _menu.Items.Add(new WinForms.ToolStripSeparator());
         _menu.Items.Add("Quit", null, (_, _) => QuitRequested?.Invoke(this, EventArgs.Empty));
 
@@ -75,6 +76,8 @@ public sealed partial class TrayIcon : IDisposable
     public event EventHandler<bool>? StartWithWindowsChanged;
 
     public event EventHandler? RefreshRequested;
+
+    public event EventHandler? SettingsRequested;
 
     /// <summary>Raised when the user picks a project from the "Claude projects" submenu.</summary>
     public event EventHandler<ClaudeProject>? OpenProjectRequested;

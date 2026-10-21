@@ -6,7 +6,7 @@ namespace ClaudeUsage.Projects;
 /// </summary>
 public sealed class ProjectCatalog(string root)
 {
-    public string Root { get; } = root;
+    public string Root { get; private set; } = root;
 
     /// <summary>Null while the scan is still running.</summary>
     public IReadOnlyList<ClaudeProject>? Projects { get; private set; }
@@ -25,6 +25,13 @@ public sealed class ProjectCatalog(string root)
     {
         Projects = null;
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Switches to another root and drops the list, as <see cref="BeginScan"/>; the caller scans it.</summary>
+    public void BeginScan(string root)
+    {
+        Root = root;
+        BeginScan();
     }
 
     public void SetProjects(IReadOnlyList<ClaudeProject> projects)
