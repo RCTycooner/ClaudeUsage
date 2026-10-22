@@ -5,3 +5,6 @@ obj/
 *.suo
 TestResults/
 publish/
+
+# Claude Code worktrees
+.claude/worktrees/
