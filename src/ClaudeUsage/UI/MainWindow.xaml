@@ -79,7 +79,7 @@
                             Click="OnProjectsClick" />
                     <Button Style="{StaticResource HeaderButton}"
                             Content="&#xE9D2;"
-                            ToolTip="Open history (zoom and scroll further back)"
+                            ToolTip="Show or hide history (zoom and scroll further back)"
                             Click="OnHistoryClick" />
                     <Button Style="{StaticResource HeaderButton}"
                             Content="&#xE713;"

@@ -161,23 +161,18 @@ public partial class MainWindow : Window
         menu.IsOpen = true;
     }
 
-    /// <summary>Opens the history window, or brings the open one forward.</summary>
+    /// <summary>Toggles the history window: opens it, or closes the open one.</summary>
     private void OnHistoryClick(object sender, RoutedEventArgs e)
     {
-        if (_history is null)
+        if (_history is not null)
         {
-            _history = new HistoryWindow(_viewModel);
-            _history.Closed += (_, _) => _history = null;
-            _history.Show();
+            _history.Close();
             return;
         }
 
-        if (_history.WindowState == WindowState.Minimized)
-        {
-            _history.WindowState = WindowState.Normal;
-        }
-
-        _history.Activate();
+        _history = new HistoryWindow(_viewModel);
+        _history.Closed += (_, _) => _history = null;
+        _history.Show();
     }
 
     private void OnSettingsClick(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke(this, EventArgs.Empty);
