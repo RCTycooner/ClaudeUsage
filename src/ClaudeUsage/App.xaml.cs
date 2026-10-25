@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using ClaudeUsage.Insights;
 using ClaudeUsage.Projects;
 using ClaudeUsage.Storage;
 using ClaudeUsage.Tray;
@@ -25,6 +26,8 @@ public partial class App : Application, IDisposable
     private UsageHistoryStore? _history;
     private UsagePoller? _poller;
     private ClaudeCliUsageSource? _usageSource;
+    private ClaudeInsightsReportSource? _insightsSource;
+    private InsightsMailer? _insights;
     private RunKeyStartupRegistration? _startup;
     private ProjectCatalog? _projects;
     private SettingsWindow? _settingsWindow;
@@ -101,6 +104,8 @@ public partial class App : Application, IDisposable
         }
 
         _usageSource = new ClaudeCliUsageSource(folder, settings.ClaudePath);
+        _insightsSource = new ClaudeInsightsReportSource(folder, settings.ClaudePath);
+        _insights = new InsightsMailer(_insightsSource, new OutlookMailSender());
         _poller = new UsagePoller(_usageSource, Dispatcher);
         _poller.Updated += OnUsageUpdated;
         _poller.Failed += OnUsageFailed;
@@ -124,6 +129,7 @@ public partial class App : Application, IDisposable
         GC.SuppressFinalize(this);
         _listenerCts?.Cancel();
         _poller?.Dispose();
+        _insights?.Dispose();
         _tray?.Dispose();
         _settingsStore?.Dispose();
         _showEvent?.Dispose();
@@ -256,6 +262,34 @@ public partial class App : Application, IDisposable
         _history?.Append(snapshot);
         UsageState.SetSnapshot(snapshot, _history?.Samples ?? []);
         _tray?.Update(snapshot);
+        _ = SendInsightsIfDueAsync(snapshot);
+    }
+
+    /// <summary>Mails the weekly /insights report when it is due (see <see cref="InsightsMailer"/>); failures are logged.</summary>
+    private async Task SendInsightsIfDueAsync(UsageSnapshot snapshot)
+    {
+        if (_insights is null || _window is null)
+        {
+            return;
+        }
+
+        var settings = _window.Settings;
+        try
+        {
+            if (await _insights.SendIfDueAsync(snapshot, settings.InsightsEmail, settings.InsightsSentFor) is { } reset)
+            {
+                _window.SetInsightsSentFor(reset);
+                _logger?.Log($"Mailed the weekly insights report to {settings.InsightsEmail}.");
+            }
+        }
+        catch (InsightsException ex)
+        {
+            _logger?.Log("Could not mail the weekly insights report.", ex, ex.RawOutput);
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutting down.
+        }
     }
 
     private void OnUsageFailed(object? sender, UsagePollFailure failure)
@@ -362,6 +396,9 @@ public partial class App : Application, IDisposable
         }
 
         var previous = _window.Settings;
+
+        // The form was filled when the window opened; a report mailed since then must not be forgotten.
+        settings = settings with { InsightsSentFor = previous.InsightsSentFor };
         if (_startup is not null && settings.StartWithWindows is bool wanted && wanted != _startup.IsEnabled)
         {
             try
@@ -382,6 +419,11 @@ public partial class App : Application, IDisposable
         if (_usageSource is not null && !string.Equals(previous.ClaudePath, settings.ClaudePath, StringComparison.Ordinal))
         {
             _usageSource.ClaudePathOverride = settings.ClaudePath;
+            if (_insightsSource is not null)
+            {
+                _insightsSource.ClaudePathOverride = settings.ClaudePath;
+            }
+
             _ = RefreshNowAsync();
         }
 

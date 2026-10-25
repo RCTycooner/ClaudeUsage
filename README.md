@@ -8,7 +8,8 @@ A small Windows tray widget that shows your Claude plan usage (session, week, an
 - Optional "stay on top"; window position and that setting are remembered.
 - A 7-day chart in the widget. The chart button opens a resizable history window over everything stored (up to 90 days): 1D / 7D / 30D / All presets, zoom (buttons, mouse wheel at the cursor, + / −), scrolling (scroll bar, drag, Shift+wheel, arrow keys), a "Now" button that follows new readings, and a hover read-out of the values at any point.
 - Tray menu: current stats, Show UI, Claude projects, Refresh now, Open data folder, Start with Windows, Settings…, Quit.
-- Settings (gear button or tray menu): Claude CLI path, projects folder, stay on top, and Start with Windows. Blank paths use the defaults; a path that doesn't exist is refused.
+- Settings (gear button or tray menu): Claude CLI path, projects folder, weekly insights email, stay on top, and Start with Windows. Blank paths use the defaults; a path that doesn't exist is refused.
+- Weekly insights email: when an address is set, the widget runs `claude -p "/insights"` in the hour before the weekly (all models) limit resets and mails the HTML report (`%USERPROFILE%\.claude\usage-data\report-<timestamp>.html`) to that address as an attachment, through classic Outlook (COM, its default account; "new Outlook" has no COM interface). It is checked after each poll, so the widget must be running in that hour. Each week is sent once (`insightsSentFor` in `settings.json`); a failure is logged to `log.txt` and not retried until the widget restarts. Unlike `/usage`, `/insights` calls the model and uses tokens. Leave the address blank to turn it off.
 - Claude projects: at startup the app scans `projectsRoot` in `settings.json` (default `D:\`) in the background for folders with a `CLAUDE.md`, skipping hidden/system folders, junctions, `.git`, `.claude` (worktrees), `node_modules`, `bin`, `obj` and `packages`. The list is in the tray menu and behind the prompt button in the widget's header; each entry shows the folder name (full path as tooltip) and opens a PowerShell window there running `claude` (`powershell.exe -NoExit -Command claude`). "Rescan" at the bottom of either menu scans again (e.g. after `/init` in a new folder).
 - Start with Windows adds `"<path>\ClaudeUsage.exe" --hidden` to `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, so it starts in the tray without opening the window. If the exe moves, the menu item shows unchecked; tick it again to update the entry.
 
@@ -37,7 +38,7 @@ Every 5 minutes (and on "Refresh now" in the tray menu) the app runs `claude -p 
 | File | Contents |
 |---|---|
 | `history.jsonl` | one sample per poll, kept for 90 days; used for the charts |
-| `settings.json` | stay-on-top, window position, optional `claude` path override, `projectsRoot` for the projects menu |
+| `settings.json` | stay-on-top, window position, optional `claude` path override, `projectsRoot` for the projects menu, `insightsEmail` and the week it was last sent for |
 | `log.txt` | errors, unparsable output, crashes, and usage lines that disappeared from the output |
 
 All files are UTF-8 without BOM.

@@ -132,6 +132,11 @@
             </DockPanel>
             <TextBlock x:Name="ProjectsRootHint" Style="{StaticResource Hint}" />
 
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Weekly insights email" />
+            <TextBox x:Name="InsightsEmailBox" />
+            <TextBlock Style="{StaticResource Hint}"
+                       Text="About an hour before the weekly limit resets, runs /insights and mails the report to this address through Outlook. Uses tokens. Leave blank to turn this off." />
+
             <CheckBox x:Name="TopmostBox" Content="Keep the widget on top of other windows" Margin="0,16,0,0" />
             <CheckBox x:Name="StartWithWindowsBox" Content="Start with Windows (in the tray)" />
 
