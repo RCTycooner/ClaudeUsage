@@ -125,6 +125,14 @@ public sealed class ClaudeCliUsageSourceTests
     }
 
     [Fact]
+    public void CreateStartInfo_uses_the_given_arguments()
+    {
+        var psi = ClaudeCliUsageSource.CreateStartInfo(@"C:\Users\me\.local\bin\claude.exe", @"C:\data", ["-p", "/insights"]);
+
+        Assert.Equal(["-p", "/insights"], psi.ArgumentList);
+    }
+
+    [Fact]
     public void CreateStartInfo_runs_cmd_shim_through_cmd_exe_with_quoting()
     {
         var psi = ClaudeCliUsageSource.CreateStartInfo(@"C:\Users\Jane Doe\AppData\Roaming\npm\claude.cmd", @"C:\data");

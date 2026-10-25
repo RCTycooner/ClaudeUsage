@@ -5,6 +5,9 @@ using System.Text.Json;
 
 namespace ClaudeUsage.Usage;
 
+/// <summary>How a claude.exe run ended: exit code and everything it wrote.</summary>
+public sealed record ClaudeRunResult(int ExitCode, string Stdout, string Stderr);
+
 /// <summary>
 /// Runs <c>claude -p "/usage" --output-format json --no-session-persistence --strict-mcp-config</c> and returns the envelope's
 /// <c>result</c> text. <c>/usage</c> is a local command: no model call, no tokens.
@@ -55,8 +58,28 @@ public sealed class ClaudeCliUsageSource : IUsageSource
             ?? throw new UsageSourceException(
                 $"{ExeName} not found (checked settings 'claudePath', PATH, %USERPROFILE%\\.local\\bin and %APPDATA%\\npm).");
 
-        Directory.CreateDirectory(_workingDirectory);
-        var psi = CreateStartInfo(exe, _workingDirectory);
+        var (exitCode, stdout, stderr) = await RunAsync(exe, _workingDirectory, s_arguments, s_timeout, cancellationToken)
+            .ConfigureAwait(false);
+        if (exitCode != 0 && string.IsNullOrWhiteSpace(stdout))
+        {
+            throw new UsageSourceException(
+                $"{ExeName} exited with code {exitCode}: {Truncate(stderr.Trim())}")
+            { RawOutput = Truncate(stderr) };
+        }
+
+        return ParseEnvelope(stdout);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="exe"/> hidden, at BelowNormal priority and without the parent session's variables, and
+    /// returns its exit code and output (a nonzero exit is not an error here). Throws <see cref="UsageSourceException"/>
+    /// when it cannot start or runs past <paramref name="timeout"/> (the process tree is killed then).
+    /// </summary>
+    public static async Task<ClaudeRunResult> RunAsync(
+        string exe, string workingDirectory, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(workingDirectory);
+        var psi = CreateStartInfo(exe, workingDirectory, arguments);
         SanitizeEnvironment(psi.Environment);
 
         using var process = new Process { StartInfo = psi };
@@ -77,45 +100,36 @@ public sealed class ClaudeCliUsageSource : IUsageSource
         process.StandardInput.Close();
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(s_timeout);
+        timeoutCts.CancelAfter(timeout);
         var stdoutTask = stdoutReader.ReadToEndAsync(timeoutCts.Token);
         var stderrTask = stderrReader.ReadToEndAsync(timeoutCts.Token);
 
-        string stdout, stderr;
         bool exited = false;
         try
         {
             await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
             exited = true;
-            stdout = await stdoutTask.ConfigureAwait(false);
-            stderr = await stderrTask.ConfigureAwait(false);
+            return new ClaudeRunResult(process.ExitCode, await stdoutTask.ConfigureAwait(false), await stderrTask.ConfigureAwait(false));
         }
         catch (OperationCanceledException)
         {
             KillQuietly(process);
             cancellationToken.ThrowIfCancellationRequested();
             throw new UsageSourceException(exited
-                ? $"{ExeName} exited, but its output did not finish within {s_timeout.TotalSeconds:0} s (a child process may still hold the pipe)."
-                : $"{ExeName} did not finish within {s_timeout.TotalSeconds:0} s and was killed.");
+                ? $"{ExeName} exited, but its output did not finish within {FormatDuration(timeout)} (a child process may still hold the pipe)."
+                : $"{ExeName} did not finish within {FormatDuration(timeout)} and was killed.");
         }
-
-        if (process.ExitCode != 0 && string.IsNullOrWhiteSpace(stdout))
-        {
-            throw new UsageSourceException(
-                $"{ExeName} exited with code {process.ExitCode}: {Truncate(stderr.Trim())}")
-            { RawOutput = Truncate(stderr) };
-        }
-
-        return ParseEnvelope(stdout);
     }
 
     /// <summary>
-    /// Start info for <paramref name="exe"/> with the /usage arguments. A <c>.cmd</c>/<c>.bat</c> shim (npm install)
-    /// cannot be started directly, so it runs through <c>cmd.exe /d /s /c "&lt;quoted command line&gt;"</c>.
+    /// Start info for <paramref name="exe"/> with <paramref name="arguments"/> (the /usage ones by default). A
+    /// <c>.cmd</c>/<c>.bat</c> shim (npm install) cannot be started directly, so it runs through
+    /// <c>cmd.exe /d /s /c "&lt;quoted command line&gt;"</c>.
     /// </summary>
-    public static ProcessStartInfo CreateStartInfo(string exe, string workingDirectory)
+    public static ProcessStartInfo CreateStartInfo(string exe, string workingDirectory, IReadOnlyList<string>? arguments = null)
     {
         ArgumentNullException.ThrowIfNull(exe);
+        arguments ??= s_arguments;
         var psi = new ProcessStartInfo
         {
             UseShellExecute = false,
@@ -132,13 +146,13 @@ public sealed class ClaudeCliUsageSource : IUsageSource
         {
             // /s: strip only the outer quotes, keep the rest verbatim; /d: skip AutoRun commands.
             psi.FileName = Environment.GetEnvironmentVariable("ComSpec") is { Length: > 0 } comSpec ? comSpec : "cmd.exe";
-            var commandLine = string.Join(' ', new[] { exe }.Concat(s_arguments).Select(QuoteForCmd));
+            var commandLine = string.Join(' ', new[] { exe }.Concat(arguments).Select(QuoteForCmd));
             psi.Arguments = $"/d /s /c \"{commandLine}\"";
         }
         else
         {
             psi.FileName = exe;
-            foreach (var arg in s_arguments)
+            foreach (var arg in arguments)
             {
                 psi.ArgumentList.Add(arg);
             }
@@ -307,6 +321,9 @@ public sealed class ClaudeCliUsageSource : IUsageSource
     }
 
     private static string Truncate(string text) => text.Length > MaxDetailChars ? text[..MaxDetailChars] + "..." : text;
+
+    private static string FormatDuration(TimeSpan duration) =>
+        duration.TotalMinutes >= 1 ? $"{duration.TotalMinutes:0} min" : $"{duration.TotalSeconds:0} s";
 
     /// <summary>
     /// Runs the poll at BelowNormal so it does not compete with the foreground (it spawns git, rg and MCP servers,

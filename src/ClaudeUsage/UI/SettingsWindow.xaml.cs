@@ -27,6 +27,7 @@ public partial class SettingsWindow : Window
         ProjectsRootBox.Text = settings.ProjectsRoot ?? string.Empty;
         ProjectsRootHint.Text =
             $"Scanned for {ProjectScanner.MarkerFileName} files (the projects menu). Leave blank for {AppSettings.DefaultProjectsRoot}";
+        InsightsEmailBox.Text = settings.InsightsEmail ?? string.Empty;
         TopmostBox.IsChecked = settings.Topmost;
         StartWithWindowsBox.IsChecked = settings.StartWithWindows == true;
     }
@@ -69,7 +70,7 @@ public partial class SettingsWindow : Window
 
     private void OnSaveClick(object sender, RoutedEventArgs e)
     {
-        if (SettingsForm.Validate(ClaudePathBox.Text, ProjectsRootBox.Text) is { } error)
+        if (SettingsForm.Validate(ClaudePathBox.Text, ProjectsRootBox.Text, InsightsEmailBox.Text) is { } error)
         {
             ErrorText.Text = error;
             ErrorText.Visibility = Visibility.Visible;
@@ -77,7 +78,8 @@ public partial class SettingsWindow : Window
         }
 
         Saved?.Invoke(this, SettingsForm.Apply(
-            _settings, ClaudePathBox.Text, ProjectsRootBox.Text, TopmostBox.IsChecked == true, StartWithWindowsBox.IsChecked == true));
+            _settings, ClaudePathBox.Text, ProjectsRootBox.Text, InsightsEmailBox.Text, TopmostBox.IsChecked == true,
+            StartWithWindowsBox.IsChecked == true));
         Close();
     }
 

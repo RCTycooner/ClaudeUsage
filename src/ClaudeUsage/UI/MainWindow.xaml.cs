@@ -85,6 +85,13 @@ public partial class MainWindow : Window
         QueueSave();
     }
 
+    /// <summary>Records the weekly reset the insights report was mailed for and queues a save.</summary>
+    public void SetInsightsSentFor(DateTimeOffset reset)
+    {
+        _settings = _settings with { InsightsSentFor = reset };
+        QueueSave();
+    }
+
     /// <summary>
     /// The kept settings with the current position and stay-on-top; no disk read. Left/Top are NaN until a
     /// centred window is first shown (e.g. started with --hidden); the saved position is kept then.
