@@ -6,23 +6,24 @@ namespace ClaudeUsage.Usage;
 public sealed record UsagePollFailure(DateTimeOffset At, string Message, string? RawText, Exception Error);
 
 /// <summary>
-/// Polls an <see cref="IUsageSource"/> every 5 minutes (first poll immediately) on a background task.
+/// Polls an <see cref="IUsageSource"/> every <see cref="Interval"/> (first poll immediately) on a background task.
 /// Polls never overlap. <see cref="Updated"/> and <see cref="Failed"/> are raised through the injected invoker
 /// (the WPF dispatcher in the app), and never after <see cref="Dispose"/>.
 /// </summary>
 public sealed class UsagePoller : IDisposable
 {
-    public static readonly TimeSpan DefaultInterval = TimeSpan.FromMinutes(5);
+    public static readonly TimeSpan DefaultInterval = TimeSpan.FromMinutes(1);
 
     /// <summary>How long <see cref="Dispose"/> waits for an in-flight poll (and its child process) to wind down.</summary>
     public static readonly TimeSpan DisposeWait = TimeSpan.FromSeconds(2);
 
     private readonly IUsageSource _source;
     private readonly Func<Action, CancellationToken, Task> _invoke;
-    private readonly TimeSpan _interval;
     private readonly Func<DateTimeOffset> _clock;
     private readonly CancellationTokenSource _cts = new();
     private readonly Lock _gate = new();
+    private TimeSpan _interval;
+    private PeriodicTimer? _timer;
     private Task? _inFlight;
     private Task? _loop;
 
@@ -46,6 +47,31 @@ public sealed class UsagePoller : IDisposable
     public event EventHandler<UsageSnapshot>? Updated;
 
     public event EventHandler<UsagePollFailure>? Failed;
+
+    /// <summary>Time between polls. Changing it restarts the wait: the next poll is one new interval from now.</summary>
+    public TimeSpan Interval
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _interval;
+            }
+        }
+
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(value, TimeSpan.Zero);
+            lock (_gate)
+            {
+                _interval = value;
+                if (_timer is not null)
+                {
+                    _timer.Period = value;
+                }
+            }
+        }
+    }
 
     public void Start()
     {
@@ -108,9 +134,15 @@ public sealed class UsagePoller : IDisposable
 
     private async Task RunAsync(CancellationToken token)
     {
+        PeriodicTimer timer;
+        lock (_gate)
+        {
+            // Created under the lock so an Interval change cannot slip in between reading it and publishing the timer.
+            timer = _timer = new PeriodicTimer(_interval);
+        }
+
         try
         {
-            using var timer = new PeriodicTimer(_interval);
             do
             {
                 await RefreshNowAsync().ConfigureAwait(false);
@@ -120,6 +152,15 @@ public sealed class UsagePoller : IDisposable
         catch (OperationCanceledException)
         {
             // Shutting down.
+        }
+        finally
+        {
+            lock (_gate)
+            {
+                _timer = null;
+            }
+
+            timer.Dispose();
         }
     }
 

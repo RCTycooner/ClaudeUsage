@@ -106,7 +106,7 @@ public partial class App : Application, IDisposable
         _usageSource = new ClaudeCliUsageSource(folder, settings.ClaudePath);
         _insightsSource = new ClaudeInsightsReportSource(folder, settings.ClaudePath);
         _insights = new InsightsMailer(_insightsSource, new OutlookMailSender());
-        _poller = new UsagePoller(_usageSource, Dispatcher);
+        _poller = new UsagePoller(_usageSource, Dispatcher, settings.EffectiveRefreshInterval);
         _poller.Updated += OnUsageUpdated;
         _poller.Failed += OnUsageFailed;
         _poller.Start();
@@ -425,6 +425,11 @@ public partial class App : Application, IDisposable
             }
 
             _ = RefreshNowAsync();
+        }
+
+        if (_poller is not null && previous.EffectiveRefreshInterval != settings.EffectiveRefreshInterval)
+        {
+            _poller.Interval = settings.EffectiveRefreshInterval;
         }
 
         if (_projects is not null

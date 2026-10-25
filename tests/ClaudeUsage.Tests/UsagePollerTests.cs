@@ -140,6 +140,44 @@ public sealed class UsagePollerTests
         Assert.Equal(1, source.Calls);
     }
 
+    [Fact]
+    public async Task Changing_the_interval_applies_to_the_running_timer()
+    {
+        var source = new CountingSource(GoodText);
+        using var poller = CreatePoller(source);
+
+        poller.Start();
+        await source.WaitForCallsAsync(1);
+
+        // Started with an hour between polls; a second poll only comes if the new interval took effect.
+        poller.Interval = TimeSpan.FromMilliseconds(50);
+        await source.WaitForCallsAsync(2);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(50), poller.Interval);
+    }
+
+    /// <summary>Fake source that answers straight away and counts its calls.</summary>
+    private sealed class CountingSource(string text) : IUsageSource
+    {
+        private int _calls;
+
+        public async Task WaitForCallsAsync(int calls)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (Volatile.Read(ref _calls) < calls)
+            {
+                Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting for {calls} poll(s).");
+                await Task.Delay(10);
+            }
+        }
+
+        public Task<string> FetchRawAsync(CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _calls);
+            return Task.FromResult(text);
+        }
+    }
+
     /// <summary>Fake source whose fetch blocks until <see cref="Release"/> is called.</summary>
     private sealed class GatedSource : IUsageSource
     {
