@@ -124,6 +124,14 @@
             <TextBlock Style="{StaticResource Hint}"
                        Text="Path to claude.exe or claude.cmd. Leave blank to look on PATH, in ~\.local\bin and %APPDATA%\npm." />
 
+            <TextBlock Style="{StaticResource FieldLabel}" Text="Refresh every" />
+            <StackPanel Orientation="Horizontal">
+                <TextBox x:Name="RefreshMinutesBox" Width="48" MaxLength="2" />
+                <TextBlock Text="minutes" Margin="8,0,0,0" FontSize="12" Foreground="{StaticResource TextPrimary}"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock x:Name="RefreshMinutesHint" Style="{StaticResource Hint}" />
+
             <TextBlock Style="{StaticResource FieldLabel}" Text="Projects folder" />
             <DockPanel LastChildFill="True">
                 <Button DockPanel.Dock="Right" Style="{StaticResource ChipButton}" Margin="6,0,0,0" Content="Browse…"

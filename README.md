@@ -25,7 +25,7 @@ Get `ClaudeUsage-vX.Y.Z-win-x64.zip` from the [latest release](https://github.co
 
 ## How it gets data
 
-Every 5 minutes (and on "Refresh now" in the tray menu) the app runs `claude -p "/usage" --output-format json --no-session-persistence`. This is a local command: it does not call the model and uses no tokens. The output text is parsed into the three usage buckets; if the format changes, the window shows the raw text.
+Every minute by default (1–5 minutes, `refreshMinutes` in `settings.json` or the settings window; and on "Refresh now" in the tray menu) the app runs `claude -p "/usage" --output-format json --no-session-persistence`. This is a local command: it does not call the model and uses no tokens. The output text is parsed into the three usage buckets; if the format changes, the window shows the raw text.
 
 `claude` is looked up in this order: `claudePath` in `settings.json`, `claude.exe` on `PATH`, `%USERPROFILE%\.local\bin\claude.exe` (native installer), then an npm `claude.cmd` shim on `PATH` or in `%APPDATA%\npm`. A `.cmd` shim is run through `cmd.exe /d /s /c`. The child process does not inherit the variables of a Claude Code session the widget may have been started from (`CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, session ids), and runs with `DISABLE_AUTOUPDATER=1`.
 
@@ -38,7 +38,7 @@ Every 5 minutes (and on "Refresh now" in the tray menu) the app runs `claude -p 
 | File | Contents |
 |---|---|
 | `history.jsonl` | one sample per poll, kept for 90 days; used for the charts |
-| `settings.json` | stay-on-top, window position, optional `claude` path override, `projectsRoot` for the projects menu, `insightsEmail` and the week it was last sent for |
+| `settings.json` | stay-on-top, window position, optional `claude` path override, `projectsRoot` for the projects menu, `refreshMinutes`, `insightsEmail` and the week it was last sent for |
 | `log.txt` | errors, unparsable output, crashes, and usage lines that disappeared from the output |
 
 All files are UTF-8 without BOM.

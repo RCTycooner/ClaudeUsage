@@ -9,8 +9,8 @@ public readonly record struct ChartPoint(DateTimeOffset Taken, double Percent);
 public static class ChartMath
 {
     /// <summary>
-    /// Consecutive samples further apart than this are not joined (machine asleep, app closed). Three poll intervals,
-    /// so a slow or failed poll does not break the line.
+    /// Consecutive samples further apart than this are not joined (machine asleep, app closed). Three of the longest
+    /// poll interval (<see cref="AppSettings.MaxRefreshMinutes"/>), so a slow or failed poll does not break the line.
     /// </summary>
     public static readonly TimeSpan MaxGap = TimeSpan.FromMinutes(15);
 

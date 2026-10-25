@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
@@ -28,6 +29,9 @@ public partial class SettingsWindow : Window
         ProjectsRootHint.Text =
             $"Scanned for {ProjectScanner.MarkerFileName} files (the projects menu). Leave blank for {AppSettings.DefaultProjectsRoot}";
         InsightsEmailBox.Text = settings.InsightsEmail ?? string.Empty;
+        RefreshMinutesBox.Text = settings.RefreshMinutes?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+        RefreshMinutesHint.Text =
+            $"How often /usage is checked, {AppSettings.MinRefreshMinutes} to {AppSettings.MaxRefreshMinutes} minutes. Uses no tokens. Leave blank for {AppSettings.DefaultRefreshMinutes}.";
         TopmostBox.IsChecked = settings.Topmost;
         StartWithWindowsBox.IsChecked = settings.StartWithWindows == true;
     }
@@ -70,7 +74,7 @@ public partial class SettingsWindow : Window
 
     private void OnSaveClick(object sender, RoutedEventArgs e)
     {
-        if (SettingsForm.Validate(ClaudePathBox.Text, ProjectsRootBox.Text, InsightsEmailBox.Text) is { } error)
+        if (SettingsForm.Validate(ClaudePathBox.Text, ProjectsRootBox.Text, InsightsEmailBox.Text, RefreshMinutesBox.Text) is { } error)
         {
             ErrorText.Text = error;
             ErrorText.Visibility = Visibility.Visible;
@@ -78,8 +82,8 @@ public partial class SettingsWindow : Window
         }
 
         Saved?.Invoke(this, SettingsForm.Apply(
-            _settings, ClaudePathBox.Text, ProjectsRootBox.Text, InsightsEmailBox.Text, TopmostBox.IsChecked == true,
-            StartWithWindowsBox.IsChecked == true));
+            _settings, ClaudePathBox.Text, ProjectsRootBox.Text, InsightsEmailBox.Text, RefreshMinutesBox.Text,
+            TopmostBox.IsChecked == true, StartWithWindowsBox.IsChecked == true));
         Close();
     }
 

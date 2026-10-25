@@ -129,6 +129,22 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.Equal(expected, store.Load().EffectiveProjectsRoot);
     }
 
+    [Theory]
+    [InlineData("""{ "topmost": true }""", 1)]
+    [InlineData("""{ "refreshMinutes": null }""", 1)]
+    [InlineData("""{ "refreshMinutes": 3 }""", 3)]
+    [InlineData("""{ "refreshMinutes": 0 }""", 1)]
+    [InlineData("""{ "refreshMinutes": 60 }""", 5)]
+    public void EffectiveRefreshInterval_defaults_to_a_minute_and_clamps_hand_edited_values(string json, int expectedMinutes)
+    {
+        Directory.CreateDirectory(_folder);
+        File.WriteAllText(Path.Combine(_folder, "settings.json"), json);
+
+        using var store = new SettingsStore(_folder);
+
+        Assert.Equal(TimeSpan.FromMinutes(expectedMinutes), store.Load().EffectiveRefreshInterval);
+    }
+
     [Fact]
     public void Concurrent_saves_do_not_throw_or_corrupt_the_file()
     {
