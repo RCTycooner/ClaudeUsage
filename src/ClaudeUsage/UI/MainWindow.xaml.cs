@@ -85,11 +85,14 @@ public partial class MainWindow : Window
         QueueSave();
     }
 
-    /// <summary>Records the weekly reset the insights report was mailed for and queues a save.</summary>
+    /// <summary>
+    /// Records the weekly reset the insights report was mailed for and saves straight away: a save lost to a crash
+    /// would mail the report again on the next start.
+    /// </summary>
     public void SetInsightsSentFor(DateTimeOffset reset)
     {
         _settings = _settings with { InsightsSentFor = reset };
-        QueueSave();
+        SaveNow();
     }
 
     /// <summary>
