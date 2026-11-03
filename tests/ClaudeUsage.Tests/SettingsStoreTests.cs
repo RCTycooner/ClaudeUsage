@@ -146,6 +146,30 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void WindowOpen_round_trips_and_defaults_to_closed_for_an_older_file()
+    {
+        Directory.CreateDirectory(_folder);
+        File.WriteAllText(Path.Combine(_folder, "settings.json"), """{ "topmost": true }""");
+        using var store = new SettingsStore(_folder);
+        Assert.False(store.Load().WindowOpen);
+
+        store.Save(new AppSettings(WindowOpen: true));
+
+        Assert.True(store.Load().WindowOpen);
+        Assert.Contains("\"windowOpen\": true", File.ReadAllText(store.Path), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, true)]
+    public void ShowWindowAtStart_shows_unless_hidden_was_asked_and_the_window_was_closed(bool startHidden, bool windowOpen, bool expected)
+    {
+        Assert.Equal(expected, new AppSettings(WindowOpen: windowOpen).ShowWindowAtStart(startHidden));
+    }
+
+    [Fact]
     public void Concurrent_saves_do_not_throw_or_corrupt_the_file()
     {
         using var store = new SettingsStore(_folder, TimeSpan.FromMilliseconds(1));

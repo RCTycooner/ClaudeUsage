@@ -38,6 +38,7 @@ public partial class MainWindow : Window
         Topmost = settings.Topmost;
         PlaceWindow(settings);
         _loaded = true;
+        IsVisibleChanged += OnIsVisibleChanged;
     }
 
     /// <summary>Raised when the user picks a project from the projects button's menu.</summary>
@@ -190,6 +191,21 @@ public partial class MainWindow : Window
     private void OnPinChanged(object sender, RoutedEventArgs e) => QueueSave();
 
     private void OnLocationChanged(object? sender, EventArgs e) => QueueSave();
+
+    /// <summary>
+    /// Records whether the window is open, so the next start (also after a forced restart) can put it back. The
+    /// window closing on quit or at sign-out doesn't count: it was open then.
+    /// </summary>
+    private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (Application.Current is App { IsQuitting: true })
+        {
+            return;
+        }
+
+        _settings = _settings with { WindowOpen = IsVisible };
+        QueueSave();
+    }
 
     private void QueueSave()
     {
