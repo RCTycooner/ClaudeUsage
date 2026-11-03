@@ -112,10 +112,18 @@ public partial class App : Application, IDisposable
         _poller.Start();
 
         StartListeningForSecondInstance();
-        if (!startHidden)
+        if (settings.ShowWindowAtStart(startHidden))
         {
             _window.Show();
         }
+    }
+
+    /// <summary>Windows is signing out or shutting down: close for real, keeping the window's open/closed state.</summary>
+    protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
+    {
+        IsQuitting = true;
+        _window?.SaveNow();
+        base.OnSessionEnding(e);
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -397,8 +405,9 @@ public partial class App : Application, IDisposable
 
         var previous = _window.Settings;
 
-        // The form was filled when the window opened; a report mailed since then must not be forgotten.
-        settings = settings with { InsightsSentFor = previous.InsightsSentFor };
+        // The form was filled when the window opened; a report mailed, or the widget shown or hidden, since then
+        // must not be forgotten.
+        settings = settings with { InsightsSentFor = previous.InsightsSentFor, WindowOpen = previous.WindowOpen };
         if (_startup is not null && settings.StartWithWindows is bool wanted && wanted != _startup.IsEnabled)
         {
             try
